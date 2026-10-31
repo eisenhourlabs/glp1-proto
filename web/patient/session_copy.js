@@ -65,3 +65,9 @@ export const COMEBACK = {
   reentry: 'Welcome back! Your next two workouts are lighter while you get back in rhythm.',
   restart: 'Welcome back! We’ll ease you in with lighter weights. Your levels are saved.',
 };
+
+export const SKIP_OPTIONS = [
+  { value: 'busy', label: 'Busy' }, { value: 'low_energy', label: 'Low energy' },
+  { value: 'not_feeling_well', label: 'Not feeling well' }, { value: 'sore', label: 'Sore' },
+  { value: 'travel', label: 'Traveling' }, { value: 'other', label: 'Something else' },
+];

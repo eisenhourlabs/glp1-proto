@@ -101,3 +101,7 @@ export const addAdjustment = async (uid, cycleId, { type, reason, detail }) =>
 /** Every logged exercise (for strength wins). Small: a few hundred rows over a cycle. */
 export const allExerciseLogs = async (uid) =>
   must(await db.from('exercise_logs').select('exercise_id,sets,skipped,created_at').eq('patient_id', uid).eq('skipped', false).order('created_at'));
+
+/** "Can't train today" with a reason (the reason is what her clinic sees on the check-in list). */
+export const skipToday = async (uid, { cycleId, week, session, day, reason }) =>
+  must(await db.from('session_logs').insert({ patient_id: uid, cycle_id: cycleId, week, session, log_date: day, status: 'skipped', skip_reason: reason }));

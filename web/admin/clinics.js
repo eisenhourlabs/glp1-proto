@@ -52,7 +52,7 @@ function clinicCard(c, refresh) {
   return h('section', { class: 'card' },
     h('div', { class: 'row between' },
       h('h2', {}, h('span', { class: 'swatch', style: `background:${c.accent_color || '#2f6f68'}` }), c.name, c.is_demo ? ' (demo)' : ''),
-      pill(c.status, c.status === 'active' ? 'active' : 'warn')),
+      h('span', { class: 'row' }, h('a', { href: `#report/${c.id}` }, 'Clinic report'), pill(c.status ?? 'active', (c.status ?? 'active') === 'active' ? 'active' : 'warn'))),
     h('div', { class: 'row filters' },
       h('label', { class: 'row' }, h('span', {}, 'Accent'), accent),
       h('label', { class: 'row' }, h('span', {}, 'Status'), status),

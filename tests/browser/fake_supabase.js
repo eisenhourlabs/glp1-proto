@@ -60,6 +60,9 @@ const me = () => S.session?.user?.id;
 const patient = () => T('patients').find((p) => p.id === me());
 const RPC = {
   content_current_version: () => 1,
+  clinic_report: () => S.rpc?.clinic_report ?? null,
+  clinic_checkin_list: () => S.rpc?.clinic_checkin_list ?? [],
+  admin_set_patient_status: ({ p_patient, p_status, p_note }) => { const p = T('patients').find((x) => x.id === p_patient); if (p.status === 'onboarding') throw new Error('onboarding'); if (p_status === 'active' && p.screening_flag === 'pause') p.screening_flag = 'cleared'; p.status = p_status; T('adjustments').push({ id: nextId++, patient_id: p_patient, type: 'status', reason: p_note || 'admin change', detail: { to: p_status }, created_at: new Date().toISOString() }); return p_status; },
   patient_set_screening: ({ p_red_flag }) => { const p = patient(); if (p.status === 'onboarding') p.screening_flag = p_red_flag ? 'pause' : 'none'; },
   patient_complete_onboarding: ({ p_start }) => { const p = patient(); p.status = p.screening_flag === 'pause' ? 'paused' : 'active'; p.start_date ??= p_start; return p.status; },
   patient_self_clear: ({ p_signed_name }) => { const p = patient(); T('patient_documents').push({ patient_id: p.id, doc_type: 'clearance', signed_name: p_signed_name }); p.screening_flag = 'cleared'; p.status = 'active'; return p.status; },
