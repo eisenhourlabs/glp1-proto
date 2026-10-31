@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Set a new password</title>
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="shared/ui.css">
+</head>
+<body>
+  <main id="app">
+    <section class="card narrow">
+      <h1>Set a new password</h1>
+      <form id="f" class="stack">
+        <label for="pw">New password (at least 8 characters)</label>
+        <input id="pw" type="password" autocomplete="new-password" minlength="8" required>
+        <button class="btn btn-primary" type="submit">Save password</button>
+        <p id="msg" class="form-msg" role="status"></p>
+      </form>
+    </section>
+  </main>
+  <script type="module">
+    import { db, getProfile, homeUrl } from './shared/supa.js';
+    const msg = document.getElementById('msg');
+    if (!db) msg.textContent = 'App not configured.';
+    document.getElementById('f').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const pw = document.getElementById('pw').value;
+      if (pw.length < 8) { msg.textContent = 'Use at least 8 characters.'; return; }
+      msg.textContent = 'Saving…';
+      const { error } = await db.auth.updateUser({ password: pw });
+      if (error) { msg.textContent = 'This reset link has expired. Request a new one from the sign-in screen.'; return; }
+      const p = await getProfile().catch(() => null);
+      msg.textContent = 'Saved. Taking you to your program…';
+      setTimeout(() => location.replace(homeUrl(p?.role ?? 'patient')), 900);
+    });
+  </script>
+</body>
+</html>

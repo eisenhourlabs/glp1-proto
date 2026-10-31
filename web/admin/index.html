@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="../icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../shared/ui.css">
+</head>
+<body>
+  <main id="app" class="wide" aria-live="polite"></main>
+  <script type="module" src="main.js"></script>
+  <script>
+    // If the app's modules fail to load (e.g. first visit while offline), say so instead of showing a blank page.
+    setTimeout(() => { const a = document.getElementById('app');
+      if (a && !a.firstChild) a.innerHTML = '<section class="card narrow"><h1>Couldn\u2019t load</h1><p>Check your connection, then pull down or reopen the app to try again.</p></section>'; }, 8000);
+  </script>
+</body>
+</html>
