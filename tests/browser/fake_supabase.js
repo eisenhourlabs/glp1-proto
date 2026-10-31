@@ -13,6 +13,7 @@ class Q {
   eq(c, v) { this.filters.push((r) => String(r[c]) === String(v)); return this; }
   in(c, vs) { this.filters.push((r) => vs.map(String).includes(String(r[c]))); return this; }
   gte(c, v) { this.filters.push((r) => String(r[c]) >= String(v)); return this; }
+  is(c, v) { this.filters.push((r) => (v === null ? r[c] == null : r[c] === v)); return this; }
   order(c, { ascending = true } = {}) { this.sorts.push([c, ascending]); return this; }
   limit(n) { this.max = n; return this; }
   delete() { this.op = 'delete'; return this; }
@@ -41,6 +42,7 @@ class Q {
     } else {
       data = t.filter((r) => this.match(r));
       if (this.table === 'profiles') data = data.map((p) => ({ ...p, clinics: T('clinics').find((c) => c.id === p.clinic_id) ?? null }));
+      if (this.table === 'clinics') data = data.map((c) => ({ ...c, clinic_codes: T('clinic_codes').filter((k) => k.clinic_id === c.id) }));
     }
     for (const [c, asc] of [...this.sorts].reverse()) {
       data = [...data].sort((a, b) => (a[c] === b[c] ? 0 : (a[c] > b[c] ? 1 : -1) * (asc ? 1 : -1)));

@@ -57,8 +57,8 @@ export async function openApp(browser, name, seedData, { shots, time } = {}) {
 
 export const fakeDb = (page) => page.evaluate(() => JSON.parse(sessionStorage.getItem('fake-db')));
 
-export async function signIn(page) {
-  await page.goto('http://localhost:8766/');
-  await page.fill('#email', 'dana@demo'); await page.fill('#password', 'pw123456');
+export async function signIn(page, { path = '', email = 'dana@demo' } = {}) {
+  await page.goto(`http://localhost:8766/${path}`);
+  await page.fill('#email', email); await page.fill('#password', 'pw123456');
   await page.getByRole('button', { name: 'Sign in' }).click();
 }
