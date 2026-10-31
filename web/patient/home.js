@@ -1,7 +1,7 @@
 // Home: this week's queue (Framework §13) with the next workout one tap away, the week-4/9 message (§7.2a),
 // comeback framing, and the workout flow: readiness → warm-up → exercises → check-in → reward.
 import { h, clear } from '../shared/dom.js';
-import { primary, secondary } from '../shared/ui.js';
+import { primary, secondary, choices } from '../shared/ui.js';
 import { weekOfCycle, weekModeMessage } from '../engine/cycle.js';
 import { comebackMode } from '../engine/adherence.js';
 import { sessionOrder, weekStatus, trainedOn, weekWindow, weekModeFor } from '../engine/session.js';
@@ -9,13 +9,15 @@ import { swapNote } from '../engine/resolve.js';
 import { activeAdjustments } from '../engine/checkin.js';
 import { loadContent, localToday } from './api.js';
 import { loadSettings, loadWarmups, cycleLogs, lastWorkoutDate, flagsSince, startSession, sessionExerciseLogs, finishSession,
-  discardSession, saveWeekMode, updateCycleStart, cycleAdjustments } from './log_api.js';
+  discardSession, saveWeekMode, updateCycleStart, cycleAdjustments, skipToday } from './log_api.js';
 import { makePlanner, warmupFor, renderReadiness } from './today.js';
 import { runWorkout } from './workout.js';
 import { COMEBACK } from './session_copy.js';
 import { renderCheckin, renderReward } from './checkin.js';
 import { renderProgress } from './progress.js';
 import { installCard } from './extras.js';
+import { openSheet } from './workout_parts.js';
+import { SKIP_OPTIONS } from './session_copy.js';
 
 const GOALS = {
   keep_muscle: 'Keep my muscle while I lose weight', everyday_strength: 'Make everyday life easier',
@@ -87,6 +89,20 @@ export async function renderHome(root, { patient, cycle }) {
     } });
     window.scrollTo?.(0, 0);
   };
+  const skipSheet = () => {
+    let reason = null; let close = () => {};
+    const msg = h('p', { class: 'form-msg', role: 'status' });
+    close = openSheet('Can’t train today?', [
+      h('p', {}, 'No problem. What’s getting in the way? It helps your clinic support you.'),
+      choices({ columns: 2, options: SKIP_OPTIONS, value: null, label: 'Reason', onChange: (v) => { reason = v; } }),
+      msg,
+      primary('Save', async () => {
+        if (!reason) { msg.textContent = 'Tap a reason.'; return; }
+        try { await skipToday(patient.id, { cycleId: cycle.id, week, session: status.next, day: today, reason }); close(); rerender(); }
+        catch (e) { console.error(e); msg.textContent = 'Couldn’t save. Check your connection.'; }
+      }),
+    ]);
+  };
   const showProgress = () => {
     clear(root);
     renderProgress(root, { patient, cycle, template, week, library: content.library, onBack: rerender }).catch(fail);
@@ -112,7 +128,12 @@ export async function renderHome(root, { patient, cycle }) {
   else if (inProgress) action = primary(`Continue ${names[inProgress.session]}`, () => resume(inProgress).catch(fail));
   else if (trainedOn(logs, today)) action = h('p', { class: 'center muted' }, 'Done for today. Rest up, and the next one is ready when you are.');
   else if (status.complete) action = h('p', { class: 'center' }, 'All of this week’s workouts are done. Great week!');
-  else action = primary(`Start ${names[status.next]}`, () => begin(status.next));
+  else {
+    const skipped = logs.some((l) => l.log_date === today && l.status === 'skipped');
+    action = h('div', { class: 'stack' }, primary(`Start ${names[status.next]}`, () => begin(status.next)),
+      skipped ? h('p', { class: 'center small muted' }, 'Got it. Your next workout is here whenever you’re ready.')
+        : h('button', { type: 'button', class: 'btn btn-link center-self', onclick: () => skipSheet() }, 'Can’t train today?'));
+  }
 
   const queue = h('section', { class: 'card' }, h('h2', {}, 'This week’s workouts'),
     h('ol', { class: 'queue' }, order.map((s) => {

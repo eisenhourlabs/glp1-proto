@@ -39,6 +39,17 @@ t.flags = [{ id: 1, patient_id: 'u1', type: 'dizzy', detail: { session_log_id: 1
 t.adjustments = [{ id: 1, patient_id: 'u1', cycle_id: 1, type: 'lighter_week_next', reason: 'low_energy_week', detail: { week: 3 }, created_at: '2026-11-12T10:00:00Z' }];
 t.patient_documents = [{ patient_id: 'u1', doc_type: 'consent', doc_version: 'consent-draft-2026-10-31', signed_at: '2026-11-01T10:00:00Z' }];
 
+S.users.push({ id: 'cv', email: 'clinic@demo', password: 'pw123456' });
+t.profiles.push({ id: 'cv', role: 'clinic_viewer', clinic_id: 'c1', display_name: 'Front desk' });
+S.rpc = {
+  clinic_report: { clinic: 'Lakeside Weight & Wellness', as_of: '2026-11-17', enrolled: 28, activated: 25, active_now: 23, active_7d: 18,
+    active_28d: 22, workouts_28d: 190, strength: { patients_with_data: 17, patients_stronger: 14, avg_load_change_pct: 22 },
+    weekly: [62, 70, 74, 71, 78, 80, 76, 40].map((p, i) => ({ week_start: `2026-${i < 3 ? '09' : i < 7 ? '10' : '11'}-${String(1 + i * 3).padStart(2, '0')}`, planned: 60, completed: Math.round(p * 0.6) })) },
+  clinic_checkin_list: [
+    { patient_name: 'Kim', joined: '2026-11-01', status: 'active', last_workout: '2026-11-02', days_since: 15, workouts_this_week: 0, workouts_last_week: 0, workouts_28d: 1, last_skip_reason: 'busy', last_skip_date: '2026-11-09', worth_a_call: true },
+    { patient_name: 'Dana', joined: '2026-11-01', status: 'active', last_workout: '2026-11-16', days_since: 1, workouts_this_week: 1, workouts_last_week: 3, workouts_28d: 7, last_skip_reason: null, last_skip_date: null, worth_a_call: false },
+  ],
+};
 const { ctx, page, btn, snap, errors } = await openApp(browser, 'admin', S, { shots, time: '2026-11-17T09:00:00' });
 await signIn(page, { path: 'admin/', email: 'admin@demo' });
 await page.getByRole('heading', { name: 'Patients' }).waitFor(); await snap('01-patients');
@@ -80,10 +91,32 @@ await input.fill('12');
 await page.locator('tr', { has: input }).getByRole('button', { name: 'Save' }).click();
 await page.locator('tr', { has: input }).getByText('Saved').waitFor(); await snap('05-settings');
 
+// Status change and the clinic report from admin
+await page.getByRole('link', { name: 'Patients' }).click();
+await page.getByRole('link', { name: 'Rosa' }).click();
+await btn('Clinic cleared her: resume').click();
+await page.getByRole('button', { name: 'Pause' }).waitFor(); await snap('06-status');
+await page.getByRole('link', { name: 'Clinics' }).click();
+await page.locator('section.card', { hasText: 'Lakeside' }).getByRole('link', { name: 'Clinic report' }).click();
+await page.getByText('Worth a check-in call (1)').waitFor(); await snap('07-admin-report');
+
 const db = await fakeDb(page);
 if (!db.tables.flags.find((f) => f.id === 1).resolved_by) fail('flag not resolved');
 if (!db.tables.clinic_codes.some((k) => k.code === 'NORTH-1')) fail('code not added');
 if (db.tables.app_settings.find((s) => s.key === 'scale_today.load_cut_pct').value !== 12) fail('setting not saved');
+const rosa = db.tables.patients.find((p) => p.id === 'u2');
+if (rosa.status !== 'active' || rosa.screening_flag !== 'cleared') fail('admin resume did not clear the screening pause');
+
+// Clinic viewer
+const cv = await openApp(browser, 'clinic', S, { shots, time: '2026-11-17T09:00:00' });
+await signIn(cv.page, { path: 'clinic/', email: 'clinic@demo' });
+await cv.page.getByText('Worth a check-in call (1)').waitFor(); await cv.snap('01-dashboard');
+const tiles = await cv.page.locator('.stat').allTextContents();
+console.log(`clinic tiles: ${tiles.join(' | ')}`);
+if (!tiles.some((x) => /78%/.test(x))) fail('active % tile');
+if (!(await cv.page.getByText('14 of 17 patients').count())) fail('strength line');
+errors.push(...cv.errors);
+await cv.ctx.close();
 
 await ctx.close(); await browser.close(); server.close();
 if (errors.length) { console.error(errors.join('\n')); process.exitCode = 1; }

@@ -26,7 +26,12 @@ mountShell({
           return;
         }
         if (patient.status === 'onboarding') return runOnboarding(body, { profile, patient, onDone: route });
-        if (patient.status === 'paused') return renderPaused(body, { profile, onDone: route });
+        if (patient.status === 'paused' && patient.screening_flag === 'pause') return renderPaused(body, { profile, onDone: route });
+        if (patient.status === 'paused' || patient.status === 'inactive') {
+          body.append(h('section', { class: 'card' }, h('h1', {}, 'Your program is on hold'),
+            h('p', {}, 'The program team has paused your workouts for now. If you have questions, please contact your clinic.')));
+          return;
+        }
         let cycle = await activeCycle(profile.id);
         if (!cycle) cycle = await createFirstCycle(patient, await loadContent());   // e.g. cleared but cycle not built yet
         return renderHome(body, { patient, cycle });

@@ -1,11 +1,11 @@
 // One patient: profile, cycle progress, workouts with check-ins and notes, adjustments with reasons, flags, documents,
 // and strength wins. Read-only except resolving flags.
 import { h } from '../shared/dom.js';
-import { secondary } from '../shared/ui.js';
+import { secondary, statusLine } from '../shared/ui.js';
 import { weekOfCycle } from '../engine/cycle.js';
 import { weeklyCounts, streaks, strengthWins } from '../engine/progress.js';
 import { recentAdherence, SKIP_REASONS } from '../engine/report.js';
-import { patientDetail, loadContent, localToday, resolveFlag } from './api.js';
+import { patientDetail, loadContent, localToday, resolveFlag, setPatientStatus } from './api.js';
 import { pill } from './patients.js';
 import { flagText } from './flags.js';
 
@@ -43,7 +43,8 @@ export async function renderPatient(root, { id, admin }) {
           ['Schedule', `${p.days_per_week ?? '—'} days · ${p.session_minutes ?? '—'} min`], ['Setup', p.setup?.replace(/_/g, ' ')]]),
         kv([['Equipment', words(p.equipment)], ['Dumbbells', p.dumbbells_available?.length ? `${p.dumbbells_available.join(', ')} lb` : '—'],
           ['Work-arounds', words(p.workarounds)], ['Restrictions', words(p.restrictions)], ['Floor work', p.floor_ok ? 'yes' : 'not yet']])),
-      h('p', { class: 'small muted' }, 'Pattern levels: ', Object.entries(p.pattern_levels || {}).map(([k, v]) => `${k} ${v}`).join(' · ') || '—')),
+      h('p', { class: 'small muted' }, 'Pattern levels: ', Object.entries(p.pattern_levels || {}).map(([k, v]) => `${k} ${v}`).join(' · ') || '—'),
+      statusControls(p, () => renderPatient(root, { id, admin }))),
 
     cycle ? h('section', { class: 'card' },
       h('h2', {}, `Cycle ${cycle.cycle_no} · ${template?.name ?? cycle.template_id}`),
@@ -100,3 +101,20 @@ function flagItem(f, admin, onChange) {
     open ? secondary('Resolve', async (e) => { e.target.disabled = true; await resolveFlag(f.id, admin.id); onChange(); }) : null);
 }
 
+
+/** Pause / resume / deactivate (logged as an adjustment). Resuming a screening pause records the clinic's clearance. */
+function statusControls(p, onChange) {
+  if (p.status === 'onboarding') return h('p', { class: 'small muted' }, 'Still onboarding.');
+  const note = h('input', { type: 'text', maxlength: 200, placeholder: 'Reason (logged)', 'aria-label': 'Reason for the status change' });
+  const msg = statusLine();
+  const go = (status) => async () => {
+    msg.textContent = 'Saving…';
+    try { await setPatientStatus(p.id, status, note.value.trim()); onChange(); }
+    catch (e) { console.error(e); msg.textContent = 'Couldn’t change the status.'; }
+  };
+  const buttons = [];
+  if (p.status !== 'active') buttons.push(secondary(p.screening_flag === 'pause' ? 'Clinic cleared her: resume' : 'Resume', go('active')));
+  if (p.status === 'active') buttons.push(secondary('Pause', go('paused')));
+  if (p.status !== 'inactive') buttons.push(secondary('Mark inactive', go('inactive')));
+  return h('div', { class: 'row filters no-print' }, note, ...buttons, msg);
+}

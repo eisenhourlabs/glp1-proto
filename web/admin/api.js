@@ -67,6 +67,9 @@ export const updateClinic = async (id, fields) => must(await db.from('clinics').
 export const addCode = async (row) => must(await db.from('clinic_codes').insert(row));
 export const setCodeActive = async (code, active) => must(await db.from('clinic_codes').update({ active }).eq('code', code));
 
+export const setPatientStatus = async (id, status, note) =>
+  must(await db.rpc('admin_set_patient_status', { p_patient: id, p_status: status, p_note: note || null }));
+
 export const settings = async () => must(await db.from('app_settings').select('*').order('key'));
 export const saveSetting = async (key, value) => must(await db.from('app_settings').update({ value }).eq('key', key));
 export const contentVersions = async () => must(await db.from('content_versions').select('version, imported_at, source_file, note, is_current, summary').order('version', { ascending: false }));

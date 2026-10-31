@@ -8,6 +8,7 @@ import { renderPatient } from './patient.js';
 import { renderFlags } from './flags.js';
 import { renderClinics } from './clinics.js';
 import { renderSettings } from './settings.js';
+import { renderClinicReport } from '../clinic/report.js';
 
 const TABS = [['patients', 'Patients'], ['flags', 'Flags'], ['clinics', 'Clinics'], ['settings', 'Settings']];
 
@@ -15,19 +16,20 @@ mountShell({
   title: 'Admin',
   allowedRoles: ['admin'],
   async render(profile, root) {
-    const nav = h('nav', { class: 'tabs', 'aria-label': 'Admin sections' });
+    const nav = h('nav', { class: 'tabs no-print', 'aria-label': 'Admin sections' });
     const body = h('div', {});
-    root.append(h('header', { class: 'app-header' }, h('div', { class: 'brand' }, `${CONFIG.BRAND_NAME} · Admin`), signOutButton()), nav, body);
+    root.append(h('header', { class: 'app-header no-print' }, h('div', { class: 'brand' }, `${CONFIG.BRAND_NAME} · Admin`), signOutButton()), nav, body);
 
     const route = async () => {
       const [name, arg] = (location.hash.replace(/^#/, '') || 'patients').split('/');
-      clear(nav).append(...TABS.map(([k, label]) => h('a', { href: `#${k}`, class: 'tab', 'aria-current': (k === name || (k === 'patients' && name === 'patient')) ? 'page' : null }, label)));
+      clear(nav).append(...TABS.map(([k, label]) => h('a', { href: `#${k}`, class: 'tab', 'aria-current': (k === name || (k === 'patients' && name === 'patient') || (k === 'clinics' && name === 'report')) ? 'page' : null }, label)));
       clear(body).append(h('p', { class: 'muted' }, 'Loading…'));
       const view = h('div', {});
       try {
         if (name === 'patient' && arg) await renderPatient(view, { id: arg, admin: profile });
         else if (name === 'flags') await renderFlags(view, { admin: profile });
         else if (name === 'clinics') await renderClinics(view);
+        else if (name === 'report' && arg) { view.append(h('p', { class: 'no-print' }, h('a', { href: '#clinics' }, '← Clinics'))); await renderClinicReport(view, { clinicId: arg }); }
         else if (name === 'settings') await renderSettings(view);
         else await renderPatients(view);
         clear(body).append(view);
