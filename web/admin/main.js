@@ -1,39 +1,42 @@
-// Admin entry. Phase 0: proves admin sign-in + RLS by listing clinics and accounts.
-// Clinic management, patients, flags and the AI proposal queue arrive in Phase 4.
+// Admin: patients, flags, clinics, settings. Hash routes so the browser back button works:
+//   #patients  #patient/<id>  #flags  #clinics  #settings
 import { mountShell, signOutButton } from '../shared/shell.js';
-import { db } from '../shared/supa.js';
-import { h } from '../shared/dom.js';
+import { h, clear } from '../shared/dom.js';
 import { CONFIG } from '../config.js';
+import { renderPatients } from './patients.js';
+import { renderPatient } from './patient.js';
+import { renderFlags } from './flags.js';
+import { renderClinics } from './clinics.js';
+import { renderSettings } from './settings.js';
+
+const TABS = [['patients', 'Patients'], ['flags', 'Flags'], ['clinics', 'Clinics'], ['settings', 'Settings']];
 
 mountShell({
   title: 'Admin',
   allowedRoles: ['admin'],
   async render(profile, root) {
-    root.append(h('header', { class: 'app-header' },
-      h('div', { class: 'brand' }, `${CONFIG.BRAND_NAME} · Admin`), signOutButton()));
+    const nav = h('nav', { class: 'tabs', 'aria-label': 'Admin sections' });
+    const body = h('div', {});
+    root.append(h('header', { class: 'app-header' }, h('div', { class: 'brand' }, `${CONFIG.BRAND_NAME} · Admin`), signOutButton()), nav, body);
 
-    const [{ data: clinics, error: e1 }, { data: people, error: e2 }] = await Promise.all([
-      db.from('clinics').select('id, name, status, is_demo, clinic_codes ( code, active )').order('name'),
-      db.from('profiles').select('display_name, role, is_demo, clinics ( name )').order('role'),
-    ]);
-
-    root.append(h('section', { class: 'card' }, h('h1', {}, 'Clinics'),
-      e1 ? h('p', {}, 'Could not load clinics.') :
-      clinics.length === 0 ? h('p', { class: 'muted' }, 'No clinics yet.') :
-      h('table', { class: 'data' },
-        h('thead', {}, h('tr', {}, h('th', {}, 'Clinic'), h('th', {}, 'Status'), h('th', {}, 'Codes'))),
-        h('tbody', {}, clinics.map((c) => h('tr', {},
-          h('td', {}, c.name, c.is_demo ? ' (demo)' : ''),
-          h('td', {}, c.status),
-          h('td', {}, (c.clinic_codes ?? []).filter((k) => k.active).map((k) => k.code).join(', ') || '—')))))));
-
-    root.append(h('section', { class: 'card' }, h('h1', {}, 'Accounts'),
-      e2 ? h('p', {}, 'Could not load accounts.') :
-      h('table', { class: 'data' },
-        h('thead', {}, h('tr', {}, h('th', {}, 'Name'), h('th', {}, 'Role'), h('th', {}, 'Clinic'))),
-        h('tbody', {}, people.map((p) => h('tr', {},
-          h('td', {}, p.display_name ?? '—', p.is_demo ? ' (demo)' : ''),
-          h('td', {}, p.role),
-          h('td', {}, p.clinics?.name ?? '—')))))));
+    const route = async () => {
+      const [name, arg] = (location.hash.replace(/^#/, '') || 'patients').split('/');
+      clear(nav).append(...TABS.map(([k, label]) => h('a', { href: `#${k}`, class: 'tab', 'aria-current': (k === name || (k === 'patients' && name === 'patient')) ? 'page' : null }, label)));
+      clear(body).append(h('p', { class: 'muted' }, 'Loading…'));
+      const view = h('div', {});
+      try {
+        if (name === 'patient' && arg) await renderPatient(view, { id: arg, admin: profile });
+        else if (name === 'flags') await renderFlags(view, { admin: profile });
+        else if (name === 'clinics') await renderClinics(view);
+        else if (name === 'settings') await renderSettings(view);
+        else await renderPatients(view);
+        clear(body).append(view);
+      } catch (e) {
+        console.error(e);
+        clear(body).append(h('section', { class: 'card' }, h('h1', {}, 'Couldn’t load this page'), h('p', {}, 'Check your connection, then reload.')));
+      }
+    };
+    window.addEventListener('hashchange', route);
+    await route();
   },
 });

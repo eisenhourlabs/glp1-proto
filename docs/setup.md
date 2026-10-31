@@ -80,5 +80,6 @@ Not part of `npm test`: they need Chromium and the private content export.
 python scripts/export_content_json.py --out ../content.local.json
 node tests/browser/onboarding.smoke.mjs ../content.local.json [screenshot-dir]
 node tests/browser/workout.smoke.mjs ../content.local.json [screenshot-dir]
+node tests/browser/admin.smoke.mjs ../content.local.json [screenshot-dir]
 ```
 They run the real pages against an in-memory fake of Supabase (`tests/browser/fake_supabase.js`).
