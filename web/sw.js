@@ -5,7 +5,7 @@
 // caches whose name starts with PREFIX. tests/sw.test.js enforces this.
 
 const PREFIX = 'glp1proto-';
-const CACHE = `${PREFIX}v2`;
+const CACHE = `${PREFIX}v3`;
 const ASSETS = [
   './',
   './index.html',
@@ -23,6 +23,11 @@ const ASSETS = [
   './patient/onboarding_profile.js',
   './patient/paused.js',
   './patient/home.js',
+  './patient/today.js',
+  './patient/log_api.js',
+  './patient/session_copy.js',
+  './patient/workout.js',
+  './patient/workout_parts.js',
   './engine/util.js',
   './engine/resolve.js',
   './engine/load.js',
@@ -31,6 +36,7 @@ const ASSETS = [
   './engine/readiness.js',
   './engine/adjust.js',
   './engine/adherence.js',
+  './engine/session.js',
   './icons/icon.svg',
 ];
 

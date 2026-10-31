@@ -131,3 +131,62 @@ textarea { font: inherit; color: inherit; background: var(--surface); width: 100
 .exlist li { margin: 6px 0; }
 .exname { font-weight: 500; }
 .note { display: block; font-size: .85rem; color: var(--text-muted); }
+
+/* ── Home and workout ────────────────────────────────────────────────────── */
+.eyebrow { color: var(--clinic-accent); font-weight: 600; font-size: .85rem; margin: 0 0 4px; letter-spacing: .02em; }
+.home-action { margin: 0 0 16px; display: flex; flex-direction: column; }
+.home-action .btn-primary { min-height: 56px; font-size: 1.05rem; }
+.queue { list-style: none; margin: 0 0 8px; padding: 0; }
+.queue-item { border-top: 1px solid var(--line); }
+.queue-item:first-child { border-top: 0; }
+.queue-item summary { cursor: pointer; padding: 12px 0; display: flex; align-items: center; gap: 8px; min-height: var(--tap); }
+.queue-mark { width: 24px; height: 24px; border-radius: 50%; display: inline-grid; place-items: center; font-size: .85rem;
+  border: 1.5px solid var(--line); flex: none; }
+.queue-item.done .queue-mark { background: var(--good); border-color: var(--good); color: #fff; }
+.queue-item.next .queue-mark { border-color: var(--clinic-accent); color: var(--clinic-accent); font-weight: 700; }
+.queue-item .exlist { padding-bottom: 10px; }
+
+.workout-bar { position: sticky; top: 0; z-index: 5; display: flex; gap: 12px; align-items: center; justify-content: space-between;
+  background: var(--bg); padding: 8px 0; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
+.workout-bar > div { flex: 1; min-width: 0; }
+.workout-bar .progress { margin: 4px 0 0; }
+.btn-warn { background: transparent; color: var(--danger); border-color: var(--danger); font-size: .85rem; padding: 6px 12px; min-height: 40px; }
+.target { font-size: 1.1rem; font-weight: 600; margin: 4px 0; }
+.note-strong { font-weight: 600; color: var(--good); margin: 8px 0; }
+details.cues { margin: 8px 0 12px; }
+details.cues summary { cursor: pointer; color: var(--brand); font-weight: 600; min-height: 36px; display: flex; align-items: center; }
+details.cues ul { margin: 4px 0 0; padding-left: 20px; }
+.sets { display: flex; flex-direction: column; gap: 8px; margin: 8px 0; }
+.set { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px;
+  border-radius: var(--radius-sm); background: var(--surface); border: 1px solid var(--line); }
+.set.done { background: color-mix(in srgb, var(--good) 8%, var(--surface)); }
+.set.later { color: var(--text-muted); border-style: dashed; }
+.set.current { flex-direction: column; align-items: stretch; gap: 10px; padding: 16px; margin: 0; }
+.set-n { font-weight: 600; margin: 0; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.stepper { display: grid; grid-template-columns: 56px 1fr 56px; gap: 8px; align-items: center; }
+.stepper-btn { font: inherit; font-size: 1.5rem; min-height: 52px; border-radius: var(--radius-sm); border: 1.5px solid var(--line);
+  background: var(--surface-2); color: var(--text); cursor: pointer; }
+.stepper-value { text-align: center; font-size: 1.35rem; font-weight: 700; }
+.weight-wrap { display: flex; align-items: center; gap: 6px; font-weight: 400; }
+.weight-input { text-align: center; font-size: 1.35rem; font-weight: 700; min-height: 52px; }
+.unit { color: var(--text-muted); }
+.btn.wide { width: 100%; min-height: 54px; }
+.rest { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0; }
+.rest p { margin: 0; }
+.rest-time { font-size: 1.6rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.hold { justify-content: space-between; }
+.tools { margin-top: 12px; }
+.tools .btn { font-size: .9rem; padding: 8px 14px; }
+.warning-signs { margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line); }
+.warmup li { margin: 8px 0; }
+.toast { min-height: 1.2em; color: var(--warn); }
+
+.sheet-backdrop { position: fixed; inset: 0; z-index: 20; background: rgba(15, 20, 19, .45); display: flex; align-items: flex-end; justify-content: center; }
+.sheet { background: var(--surface); width: 100%; max-width: 640px; max-height: 90vh; overflow: auto; border-radius: 18px 18px 0 0;
+  padding: 20px 16px max(20px, env(safe-area-inset-bottom)); box-shadow: 0 -6px 24px rgba(0,0,0,.2); display: flex; flex-direction: column; gap: 10px; }
+.sheet h2 { margin: 0 0 4px; font-size: 1.25rem; }
+.dizzy-steps { margin: 0; padding-left: 22px; font-size: 1.05rem; }
+.dizzy-steps li { margin: 6px 0; }
+.urgent { font-weight: 600; color: var(--danger); margin: 0; }
+.actions.static { position: static; background: none; }

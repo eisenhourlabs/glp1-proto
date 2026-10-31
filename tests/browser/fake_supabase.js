@@ -3,32 +3,49 @@
 const KEY = 'fake-db';
 const load = () => JSON.parse(sessionStorage.getItem(KEY) || 'null') || structuredClone(window.__FAKE_SEED__ || { tables: {}, session: null });
 let S = load();
-const save = () => sessionStorage.setItem(KEY, JSON.stringify(S));
+const save = () => { sessionStorage.setItem(KEY, JSON.stringify(S)); sessionStorage.setItem('fake-next-id', String(nextId)); };
 const T = (name) => (S.tables[name] ??= []);
-let nextId = 1000;
+let nextId = Number(sessionStorage.getItem('fake-next-id') || 1000);
 
 class Q {
-  constructor(table) { this.table = table; this.filters = []; this.op = 'select'; this.payload = null; this.one = null; this.ret = false; }
-  select() { if (this.op !== 'select') this.ret = true; return this; }
-  eq(c, v) { this.filters.push([c, v]); return this; }
-  order() { return this; }
+  constructor(table) { this.table = table; this.filters = []; this.op = 'select'; this.payload = null; this.one = null; this.sorts = []; this.max = null; }
+  select() { return this; }
+  eq(c, v) { this.filters.push((r) => String(r[c]) === String(v)); return this; }
+  in(c, vs) { this.filters.push((r) => vs.map(String).includes(String(r[c]))); return this; }
+  gte(c, v) { this.filters.push((r) => String(r[c]) >= String(v)); return this; }
+  order(c, { ascending = true } = {}) { this.sorts.push([c, ascending]); return this; }
+  limit(n) { this.max = n; return this; }
+  delete() { this.op = 'delete'; return this; }
+  upsert(rows, { onConflict } = {}) { this.op = 'upsert'; this.payload = Array.isArray(rows) ? rows : [rows]; this.keys = (onConflict || 'id').split(','); return this; }
   maybeSingle() { this.one = 'maybe'; return this; }
   single() { this.one = 'single'; return this; }
   insert(rows) { this.op = 'insert'; this.payload = Array.isArray(rows) ? rows : [rows]; return this; }
   update(f) { this.op = 'update'; this.payload = f; return this; }
-  match(r) { return this.filters.every(([c, v]) => String(r[c]) === String(v)); }
+  match(r) { return this.filters.every((f) => f(r)); }
   run() {
     const t = T(this.table);
     let data;
     if (this.op === 'insert') {
       data = this.payload.map((r) => ({ id: r.id ?? nextId++, created_at: new Date().toISOString(), ...r }));
       t.push(...data);
+    } else if (this.op === 'upsert') {
+      data = this.payload.map((row) => {
+        const hit = t.find((r) => this.keys.every((k) => String(r[k]) === String(row[k])));
+        if (hit) return Object.assign(hit, row);
+        const fresh = { id: nextId++, created_at: new Date().toISOString(), ...row }; t.push(fresh); return fresh;
+      });
     } else if (this.op === 'update') {
       data = t.filter((r) => this.match(r)); data.forEach((r) => Object.assign(r, this.payload));
+    } else if (this.op === 'delete') {
+      data = t.filter((r) => this.match(r)); S.tables[this.table] = t.filter((r) => !this.match(r));
     } else {
       data = t.filter((r) => this.match(r));
       if (this.table === 'profiles') data = data.map((p) => ({ ...p, clinics: T('clinics').find((c) => c.id === p.clinic_id) ?? null }));
     }
+    for (const [c, asc] of [...this.sorts].reverse()) {
+      data = [...data].sort((a, b) => (a[c] === b[c] ? 0 : (a[c] > b[c] ? 1 : -1) * (asc ? 1 : -1)));
+    }
+    if (this.max != null) data = data.slice(0, this.max);
     save();
     if (this.one) data = data[0] ?? null;
     if (this.one === 'single' && !data) return { data: null, error: { message: 'no rows' } };

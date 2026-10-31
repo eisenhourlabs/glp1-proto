@@ -65,7 +65,7 @@ export async function createFirstCycle(patient, content) {
   await savePatient(patient.id, { pattern_levels: patternLevels });
   const cycle = must(await db.from('cycles').insert({
     patient_id: patient.id, cycle_no: 1, template_id: template.template_id, content_version: content.version,
-    cycle_type: cycleType, start_date: patient.start_date || localToday(), session_minutes: patient.session_minutes,
+    cycle_type: cycleType, start_date: patient.start_date || localToday(), session_minutes: patient.session_minutes, status: 'active',
   }).select().single());
   const items = plan.sessions.flatMap((s) => s.items.map((it) => ({
     cycle_id: cycle.id, patient_id: patient.id, session: s.session, slot: it.slot.slot, ord: it.slot.ord,
