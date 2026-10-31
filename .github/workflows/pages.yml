@@ -37,8 +37,11 @@ jobs:
         run: bash scripts/test_db.sh
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
-      - name: Python scripts compile
-        run: python3 -m py_compile scripts/*.py
+      - name: Python scripts compile + importer tests
+        run: |
+          python3 -m pip install --quiet "openpyxl>=3.1,<4"
+          python3 -m py_compile scripts/*.py
+          python3 -m unittest discover -s tests/py -v
 
   deploy:
     if: github.event_name != 'pull_request'
