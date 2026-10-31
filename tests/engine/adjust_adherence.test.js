@@ -16,6 +16,9 @@ test('hard week → lighter week next, unless one was used (admin flag) or a che
   assert.ok(checkinAdjustments([], { thisWeekChecks: week, daysToNextCheckpoint: 21 }).some((x) => x.type === 'lighter_week_next'));
   assert.ok(checkinAdjustments([], { thisWeekChecks: week, lighterWeekUsedThisCycle: true }).some((x) => x.type === 'admin_flag'));
   assert.equal(checkinAdjustments([], { thisWeekChecks: week, daysToNextCheckpoint: 7 }).length, 0);
+  const early = [c('2026-11-02', { feel: 'too_hard' })];
+  assert.equal(checkinAdjustments([], { thisWeekChecks: early, plannedThisWeek: 3, daysToNextCheckpoint: 21 }).length, 0, '1 of 3 planned');
+  assert.ok(checkinAdjustments([], { thisWeekChecks: week, plannedThisWeek: 4, daysToNextCheckpoint: 21 }).length, '2 of 4 planned');
   const low = [c('2026-11-02', { energy: 'low' }), c('2026-11-04', { energy: 'low' })];
   assert.equal(checkinAdjustments([], { thisWeekChecks: low, daysToNextCheckpoint: 30 })[0].reason, 'low_energy_week');
 });

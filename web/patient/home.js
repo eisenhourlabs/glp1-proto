@@ -1,17 +1,21 @@
 // Home: this week's queue (Framework §13) with the next workout one tap away, the week-4/9 message (§7.2a),
-// comeback framing, and the workout flow: readiness → warm-up → exercises → finish.
+// comeback framing, and the workout flow: readiness → warm-up → exercises → check-in → reward.
 import { h, clear } from '../shared/dom.js';
 import { primary, secondary } from '../shared/ui.js';
 import { weekOfCycle, weekModeMessage } from '../engine/cycle.js';
 import { comebackMode } from '../engine/adherence.js';
 import { sessionOrder, weekStatus, trainedOn, weekWindow, weekModeFor } from '../engine/session.js';
 import { swapNote } from '../engine/resolve.js';
+import { activeAdjustments } from '../engine/checkin.js';
 import { loadContent, localToday } from './api.js';
 import { loadSettings, loadWarmups, cycleLogs, lastWorkoutDate, flagsSince, startSession, sessionExerciseLogs, finishSession,
-  discardSession, saveWeekMode, updateCycleStart } from './log_api.js';
+  discardSession, saveWeekMode, updateCycleStart, cycleAdjustments } from './log_api.js';
 import { makePlanner, warmupFor, renderReadiness } from './today.js';
 import { runWorkout } from './workout.js';
 import { COMEBACK } from './session_copy.js';
+import { renderCheckin, renderReward } from './checkin.js';
+import { renderProgress } from './progress.js';
+import { installCard } from './extras.js';
 
 const GOALS = {
   keep_muscle: 'Keep my muscle while I lose weight', everyday_strength: 'Make everyday life easier',
@@ -38,10 +42,13 @@ export async function renderHome(root, { patient, cycle }) {
     decision = weekModeFor({ week, cycle, logs, daysPerWeek: template.days_per_week, flagCount, settings });
     if (!decision.stored) await saveWeekMode(cycle, week, decision).catch(console.error);
   }
+  const active = activeAdjustments({ adjustments: await cycleAdjustments(cycle.id), logs, week });
+  const lighterByCheckin = active.lighterWeek && decision.mode === 'build';
+  const weekMode = lighterByCheckin ? 'lighter' : decision.mode;
   const comeback = comebackMode(await lastWorkoutDate(patient.id), today, settings);
   const inProgress = logs.find((l) => l.status === 'in_progress' && l.log_date === today);
   const lastDone = [...logs].reverse().find((l) => DONE.has(l.status));
-  const env = { patient, cycle, content, settings, week, weekMode: decision.mode, comeback };
+  const env = { patient, cycle, content, settings, week, weekMode, comeback, holdAndTrim: active.holdAndTrim };
   const rerender = async () => { clear(root); await renderHome(root, { patient, cycle }); window.scrollTo?.(0, 0); };
 
   // ── Workout flow ──
@@ -67,17 +74,23 @@ export async function renderHome(root, { patient, cycle }) {
     clear(root);
     const warmup = warmupFor(await loadWarmups(content.version), patient);
     runWorkout(root, { patient, cycle, sessionLog: log, sessionName: names[session], items, warmup, existing, planner, today: todayAns,
-      onFinish: (r) => finishScreen(r, session) });
+      onFinish: (r) => finishScreen({ ...r, log }, session) });
   };
   const finishScreen = (r, session) => {
     clear(root);
     if (r.ended) return rerender();
-    const doneNow = new Set([...status.done, session]).size;
-    root.append(h('section', { class: 'step center' },
-      h('h1', {}, r.status === 'done' ? 'Workout done. Nice work!' : 'Saved. Nice work today!'),
-      h('p', { class: 'lead' }, `${doneNow} of ${order.length} workouts done this week.`),
-      r.status === 'partial' ? h('p', { class: 'muted' }, 'Every part you did counts.') : null,
-      h('div', { class: 'actions' }, primary('Back to home', rerender))));
+    renderCheckin(root, { patient, cycle, log: r.log, week, perWeek: template.days_per_week, settings, onDone: ({ messages }) => {
+      clear(root);
+      renderReward(root, { patient, cycle, week, perWeek: template.days_per_week, status: r.status, messages, onHome: rerender, onProgress: showProgress })
+        .catch(fail);
+      window.scrollTo?.(0, 0);
+    } });
+    window.scrollTo?.(0, 0);
+  };
+  const showProgress = () => {
+    clear(root);
+    renderProgress(root, { patient, cycle, template, week, library: content.library, onBack: rerender }).catch(fail);
+    window.scrollTo?.(0, 0);
   };
 
   // ── Home screen ──
@@ -89,7 +102,7 @@ export async function renderHome(root, { patient, cycle }) {
   if (rawWeek < 1) notes.push(h('p', {}, `Your program starts on ${prettyDate(cycle.start_date)}. Want to start today instead?`),
     secondary('Start today', async () => { await updateCycleStart(cycle, today); rerender(); }));
   if (rawWeek > 9) notes.push(h('p', {}, 'You’ve finished this cycle! Your next one is being planned. Keep going with this week’s workouts in the meantime.'));
-  const modeMsg = weekModeMessage(decision.mode);
+  const modeMsg = lighterByCheckin ? 'This week is lighter so you can recharge. It still counts fully.' : weekModeMessage(decision.mode);
   if (modeMsg) notes.push(h('p', {}, modeMsg));
   if (comeback.mode !== 'none') notes.push(h('p', {}, COMEBACK[comeback.mode]));
   if (notes.length) hero.append(h('div', { class: 'card soft' }, ...notes));
@@ -118,9 +131,10 @@ export async function renderHome(root, { patient, cycle }) {
     })),
     h('p', { class: 'small muted' }, 'Do them in any days that suit you. Anything not done by the end of the week simply drops off.'));
 
-  root.append(hero, action ? h('div', { class: 'home-action' }, action) : null, queue);
+  root.append(hero, action ? h('div', { class: 'home-action' }, action) : null, queue,
+    h('div', { class: 'home-action' }, secondary('Your progress', showProgress)), installCard());
 
-  function fail(e) { console.error(e); clear(root).append(h('section', { class: 'card' }, h('h1', {}, 'Couldn’t open your workout'), h('p', {}, 'Check your connection, then reload.'))); }
+  function fail(e) { console.error(e); clear(root).append(h('section', { class: 'card' }, h('h1', {}, 'Something didn’t load'), h('p', {}, 'Check your connection, then reload.'))); }
 }
 
 /** Workouts left open on an earlier day: keep what she did (partial) or remove an empty one. */

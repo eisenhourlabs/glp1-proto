@@ -84,7 +84,29 @@ while (guard++ < 400) {
 }
 await snap('08-last');
 await btn('Finish workout').click();
-await page.getByText('Workout done. Nice work!').waitFor(); await snap('09-finish');
+await page.getByText('Quick check-in').waitFor();
+await btn('Save').click();
+await page.getByText('Tap how it felt and your soreness.').waitFor();
+await choice(page, 'Too hard').click(); await choice(page, 'Some').click(); await choice(page, 'Knees').click();
+await page.fill('textarea', 'Squats felt tough');
+await snap('09-checkin');
+await btn('Save').click();
+await page.getByText('Workout done!').waitFor();
+await page.getByText('First workout done').waitFor(); await snap('09b-reward');
+const stats = await page.locator('.stat').allTextContents();
+console.log(`reward: ${stats.join(' | ')}`);
+if (!/1 of 3/.test(stats[0])) fail('reward should show 1 of 3 this week');
+await btn('See progress').click();
+await page.getByText('Your progress').waitFor();
+await page.getByText('Workout reminders').waitFor(); await snap('09c-progress');
+const dl = page.waitForEvent('download').catch(() => null);
+await btn('Add to my calendar').click();
+const file = await dl;
+if (file) {
+  const ics = await (await import('node:fs/promises')).readFile(await file.path(), 'utf8');
+  if (!/RRULE:FREQ=WEEKLY;BYDAY=/.test(ics)) fail('calendar file missing the weekly rule');
+  console.log(`calendar: ${ics.match(/RRULE:[^\r\n]+/)[0]} ${ics.match(/DTSTART:[^\r\n]+/)[0]}`);
+} else fail('no calendar download');
 await btn('Back to home').click();
 await page.getByText('Done for today').waitFor(); await snap('10-home-after');
 
@@ -96,6 +118,10 @@ console.log(`day 1: status=${s1.status} scaled=${s1.scaled} energy=${s1.energy} 
   `flags=${db.tables.flags.map((f) => f.type)}`);
 if (s1.status !== 'done') fail('day 1 should be done');
 if (db.tables.cycles.length !== 1) fail('exactly one cycle');
+if (s1.feel !== 'too_hard' || s1.soreness !== 'some' || s1.sore_areas?.[0] !== 'knees' || s1.note !== 'Squats felt tough') fail('check-in not saved');
+console.log(`adjustments after day 1: ${(db.tables.adjustments || []).map((a) => `${a.type}→week ${a.detail.week ?? ''}`).join(', ') || 'none'}`);
+if ((db.tables.adjustments || []).length) fail('one tough session out of three should not change next week');
+if ((await fakeDb(page)).tables.patients[0].reminder_time !== '17:30') fail('reminder time not saved');
 if (!s1.scaled) fail('day 1 should be scaled');
 if (!db.tables.flags.some((f) => f.type === 'dizzy')) fail('dizzy flag missing');
 if (!ex1.length || ex1.some((e) => !e.skipped && (!e.sets.length || !e.rating))) fail('every exercise should be logged and rated');
@@ -131,7 +157,10 @@ if ((await page.locator('.set.done').count()) !== 1) fail('resume should show th
 await snap('12-resumed');
 await btn('End workout').click();
 await page.locator('.sheet').getByRole('button', { name: 'End workout' }).click();
-await page.getByText('Saved. Nice work today!').waitFor();
+await page.getByText('Quick check-in').waitFor();
+await choice(page, 'About right').click(); await choice(page, 'None').click();
+await btn('Save').click();
+await page.getByText('Saved. Every part counts!').waitFor(); await snap('13-reward-partial');
 db = await fakeDb(page);
 const s2 = db.tables.session_logs[1];
 console.log(`week 2: status=${s2?.status} sets=${db.tables.exercise_logs.filter((e) => e.session_log_id === s2?.id).map((e) => e.sets.length)}`);

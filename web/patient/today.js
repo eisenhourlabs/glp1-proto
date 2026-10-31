@@ -5,6 +5,7 @@ import { stepScreen, choices, primary, secondary, statusLine } from '../shared/u
 import { baseItems, planSession, applyHold } from '../engine/session.js';
 import { makeEasier, applyWorkarounds, applySoreness, scaleToday } from '../engine/readiness.js';
 import { isSixtyPlus } from '../engine/util.js';
+import { applyHoldAndTrim } from '../engine/checkin.js';
 import { engineProfile } from './api.js';
 import { exerciseHistory } from './log_api.js';
 import { PRE_SESSION, ENERGY_OPTIONS, AREA_OPTIONS, SCALE_TODAY } from './session_copy.js';
@@ -26,6 +27,7 @@ export function makePlanner(env, today) {
     const history = await exerciseHistory(patient.id, ids, { excludeSession: env.excludeSession ?? null });
     let out = planSession(items, ctx(history));
     out = applyHold(applySoreness(out, today.soreAreas || []).items);
+    if (env.holdAndTrim) out = applyHoldAndTrim(out);
     return today.scale ? scaleToday(out, settings) : out;
   };
   return {

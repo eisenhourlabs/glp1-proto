@@ -12,7 +12,7 @@ const cfg = (s, k) => (s && s[k] != null ? Number(s[k]) : DEFAULTS[k]);
 
 /**
  * Adjustments for what comes next.
- * ctx: { today, thisWeekChecks: [...], lighterWeekUsedThisCycle: bool, daysToNextCheckpoint: number,
+ * ctx: { today, thisWeekChecks: [...], plannedThisWeek: number, lighterWeekUsedThisCycle: bool, daysToNextCheckpoint: number,
  *        allPrimariesProgressedThisWeek: bool, extraSetsUsedThisCycle: bool }
  * @returns {Array<{type, reason, sessions?, sets?}>}
  *   type: 'hold_and_trim' (next 3 sessions: no load increases, −1 set on secondaries)
@@ -26,7 +26,9 @@ export function checkinAdjustments(checks, ctx = {}) {
       message: 'We eased things after two tough sessions. That’s smart training, not a step back.' });
   }
   const week = ctx.thisWeekChecks ?? [];
-  const hardShare = week.length ? week.filter((c) => c.feel === 'too_hard').length / week.length : 0;
+  // Share of the week's planned sessions (not just those done so far), so one tough first session isn't 100%.
+  const denom = Math.max(week.length, ctx.plannedThisWeek ?? 0);
+  const hardShare = denom ? week.filter((c) => c.feel === 'too_hard').length / denom : 0;
   const lowEnergy = week.filter((c) => c.energy === 'low').length;
   if (week.length && (hardShare >= 0.5 || lowEnergy >= 2)) {
     if (ctx.lighterWeekUsedThisCycle) {
