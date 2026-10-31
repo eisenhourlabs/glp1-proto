@@ -94,11 +94,12 @@ export function nextInQueue(sessionOrder, completedThisWeek) {
 
 /**
  * Materialize a cycle for a patient: resolve every slot once (exercise fixed for the cycle; the same pattern
- * twice in a week gets a different exercise when possible).
+ * twice in a week gets a different exercise when possible). opts.used: exercises to steer away from when
+ * there's a choice (a repeated cycle type gets fresh exercises, Framework §14).
  * @returns {{templateId, sessions: Array<{session, name, items: Array<{slot, exercise, reasons}>}>, skipped: number}}
  */
-export function materializeCycle(template, slots, profile, library, { minutes = 45 } = {}) {
-  const used = new Set();
+export function materializeCycle(template, slots, profile, library, { minutes = 45, used: avoid = [] } = {}) {
+  const used = new Set(avoid);
   let skipped = 0;
   const sessions = template.sessions.map(({ session, name }) => {
     const own = slots.filter((s) => s.template_id === template.template_id && s.session === session);

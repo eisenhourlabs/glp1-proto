@@ -34,7 +34,7 @@ mountShell({
         }
         let cycle = await activeCycle(profile.id);
         if (!cycle) cycle = await createFirstCycle(patient, await loadContent());   // e.g. cleared but cycle not built yet
-        return renderHome(body, { patient, cycle });
+        return renderHome(body, { patient, cycle, reload: route });
       } catch (e) {
         console.error(e);
         body.append(h('section', { class: 'card' }, h('h1', {}, 'Couldn’t load your program'), h('p', {}, 'Check your connection, then reload.')));

@@ -2,6 +2,7 @@
 import { db } from '../shared/supa.js';
 import { startingLevels, startingCycle } from '../engine/levels.js';
 import { chooseTemplate, materializeCycle } from '../engine/cycle.js';
+import { applyLevelChanges, slotsWithSwaps } from '../engine/review.js';
 
 const must = ({ data, error }) => { if (error) throw error; return data; };
 
@@ -73,4 +74,40 @@ export async function createFirstCycle(patient, content) {
   })));
   must(await db.from('cycle_items').insert(items));
   return { ...cycle, items };
+}
+
+/**
+ * Start her next cycle from a review plan: level changes, the cycle type and her confirmed days/length, swaps, and
+ * (for a repeated cycle type) fresh exercises where there's a choice. Closes the old cycle; reopens it if anything fails.
+ */
+export async function createNextCycle(patient, oldCycle, plan, content, { days, minutes, proposalId = null }) {
+  const cycleType = plan.cycle_type;
+  const daysPerWeek = cycleType === 'C1' && days === 4 ? 3 : days;
+  const template = chooseTemplate(content.templates, { cycleType, daysPerWeek, experienced: cycleType !== 'C1' });
+  if (!template) throw new Error('No template fits this schedule.');
+  const levels = applyLevelChanges(patient.pattern_levels || {}, plan.level_changes || []);
+  const profile = engineProfile({ ...patient, pattern_levels: levels });
+  const slots = slotsWithSwaps(content.slots.filter((s) => s.template_id === template.template_id), plan.swaps || []);
+  const avoid = cycleType === oldCycle.cycle_type ? oldCycle.items.map((i) => i.exercise_id).filter(Boolean) : [];
+  const built = materializeCycle(template, slots, profile, content.library, { minutes, used: avoid });
+  must(await db.from('cycles').update({ status: 'done' }).eq('id', oldCycle.id));
+  let cycle;
+  try {
+    cycle = must(await db.from('cycles').insert({
+      patient_id: patient.id, cycle_no: oldCycle.cycle_no + 1, template_id: template.template_id, content_version: content.version,
+      cycle_type: cycleType, start_date: localToday(), session_minutes: minutes, status: 'active',
+    }).select().single());
+    const items = built.sessions.flatMap((s) => s.items.map((it) => ({
+      cycle_id: cycle.id, patient_id: patient.id, session: s.session, slot: it.slot.slot, ord: it.slot.ord,
+      role: it.slot.role, pattern: it.slot.pattern, exercise_id: it.exercise?.id ?? null, reasons: it.reasons,
+    })));
+    must(await db.from('cycle_items').insert(items));
+  } catch (e) {
+    await db.from('cycles').update({ status: 'active' }).eq('id', oldCycle.id);
+    if (cycle) await db.from('cycles').update({ status: 'abandoned' }).eq('id', cycle.id);
+    throw e;
+  }
+  await savePatient(patient.id, { pattern_levels: levels, days_per_week: daysPerWeek, session_minutes: minutes });
+  if (proposalId) await db.from('ai_proposals').update({ applied_cycle_id: cycle.id }).eq('id', proposalId);
+  return cycle;
 }

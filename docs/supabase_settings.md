@@ -19,6 +19,8 @@ Everything in the hosted project that is **not** in a migration. Re-apply this l
 | Project Settings → API | Exposed schemas | `public` (default) | |
 | Storage | Buckets | none yet | `media` (exercise demos) and `branding` (clinic logos) come in later migrations |
 | Edge Functions | `enroll` | Deployed from `supabase/functions/enroll/index.ts` (Dashboard → Edge Functions → Deploy a new function → Via Editor, name `enroll`). **Verify JWT: Off** (the join page calls it with the publishable key) | Clinic-code self-enrollment. Uses the injected `SUPABASE_URL` and secret key; no secrets to add. **Pilot:** add a CAPTCHA (e.g. Turnstile) and a per-code daily cap |
-| | Secrets | none yet | Later: `ANTHROPIC_API_KEY`, VAPID keys |
+| | `ai-cycle-review` | Deployed from `supabase/functions/ai-cycle-review/index.ts` (generated: `node scripts/build_functions.mjs`), same steps as `enroll`. **Verify JWT: Off** (it checks the caller's session itself) | End-of-cycle AI review (Framework §14) |
+| | Secrets | `ANTHROPIC_API_KEY` (Anthropic Console → API keys). Optional `GLP1_AI_MODEL` (default `claude-sonnet-5-5`) | Without the key every review uses the standard plan, so nothing breaks. Later: VAPID keys |
+| Database → `app_settings` | `ai.coach_brief` | Loaded by `scripts/import_ai_brief.py` from the private content folder | Extra judgment and voice guidance for the AI; hard rules stay in code |
 | Database | Extensions | defaults (`pgcrypto`, `pg_cron` later) | |
 | Billing | Plan | Free (pauses after ~7 days idle; unpause in the dashboard) | **Pilot:** Pro (backups) in Brad's org |

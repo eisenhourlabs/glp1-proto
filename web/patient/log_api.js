@@ -105,3 +105,19 @@ export const allExerciseLogs = async (uid) =>
 /** "Can't train today" with a reason (the reason is what her clinic sees on the check-in list). */
 export const skipToday = async (uid, { cycleId, week, session, day, reason }) =>
   must(await db.from('session_logs').insert({ patient_id: uid, cycle_id: cycleId, week, session, log_date: day, status: 'skipped', skip_reason: reason }));
+
+/** The review for a cycle (her own row), or null. */
+export const cycleProposal = async (cycleId) =>
+  must(await db.from('ai_proposals').select('id, status, source, final, reflection, created_at').eq('cycle_id', cycleId).maybeSingle());
+
+/** Run the end-of-cycle review (Edge Function). Returns the proposal row, or throws. */
+export async function runReview(reflection) {
+  const { data, error } = await db.functions.invoke('ai-cycle-review', { body: { reflection } });
+  if (error) {
+    const detail = await error.context?.json?.().catch(() => null);
+    throw Object.assign(new Error(detail?.error ?? 'review_failed'), { code: detail?.error ?? null });
+  }
+  return data.proposal;
+}
+
+export const myFlags = async (uid) => must(await db.from('flags').select('type, detail, created_at').eq('patient_id', uid));

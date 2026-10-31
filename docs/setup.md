@@ -76,6 +76,16 @@ Settings rows are only added if missing (admin-tuned values are kept) unless `--
 Leave Authentication → "Allow new users to sign up" **off**: this function is the only way in, and it checks the code.
 Staff kits (printable cards and a poster with a QR code) are in Admin → Clinics → Staff kit next to each active code.
 
+## 9. The AI coach (end-of-cycle review)
+1. Deploy `supabase/functions/ai-cycle-review/index.ts` exactly like `enroll` (name it `ai-cycle-review`, **Verify JWT off**).
+2. Optional but recommended: Supabase → Edge Functions → **Secrets** → add `ANTHROPIC_API_KEY` (from console.anthropic.com → API keys).
+   Without it, every review uses the standard plan (next cycle in sequence, levels unchanged), so nothing breaks.
+3. Load the coach brief from the private content folder: `.venv\Scripts\python.exe scripts\import_ai_brief.py`
+4. Pending reviews (rule problems or outside the auto-apply bounds) appear in Admin → **AI reviews**.
+
+The function file is generated from `supabase/functions_src/ai-cycle-review/` and the engine. After changing either, run
+`node scripts/build_functions.mjs` (the tests fail if the committed file is stale).
+
 ## Everyday
 ```powershell
 git pull                                                   # get merged changes
@@ -91,5 +101,6 @@ node tests/browser/onboarding.smoke.mjs ../content.local.json [screenshot-dir]
 node tests/browser/workout.smoke.mjs ../content.local.json [screenshot-dir]
 node tests/browser/admin.smoke.mjs ../content.local.json [screenshot-dir]
 node tests/browser/join.smoke.mjs ../content.local.json [screenshot-dir]
+node tests/browser/review.smoke.mjs ../content.local.json [screenshot-dir]
 ```
 They run the real pages against an in-memory fake of Supabase (`tests/browser/fake_supabase.js`). For real QR codes in the staff-kit test: `npm i -g qrcode-generator@2.0.4`.
