@@ -5,7 +5,7 @@
 // caches whose name starts with PREFIX. tests/sw.test.js enforces this.
 
 const PREFIX = 'glp1proto-';
-const CACHE = `${PREFIX}v3`;
+const CACHE = `${PREFIX}v4`;
 const ASSETS = [
   './',
   './index.html',
@@ -41,7 +41,8 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)));
+  // cache: 'reload' skips the browser's HTTP cache, so a new deploy never gets cached with old files.
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS.map((a) => new Request(a, { cache: 'reload' })))));
   self.skipWaiting();
 });
 
@@ -62,9 +63,11 @@ self.addEventListener('fetch', (e) => {
   const isCdn = url.hostname === 'cdn.jsdelivr.net';
   if (!inScope && !isCdn) return;                                // not ours: leave it alone
 
-  // Network-first; fall back to this app's cache when offline.
+  // Network-first; fall back to this app's cache when offline. Our own files are revalidated with the server
+  // every time (cache: 'no-cache' gives a cheap 304 when unchanged), so a deploy shows up on the next load instead
+  // of after GitHub Pages' 10-minute browser cache runs out.
   e.respondWith(
-    fetch(req)
+    fetch(inScope && req.mode !== 'navigate' ? new Request(req, { cache: 'no-cache' }) : req)
       .then((res) => {
         if (res && res.ok) {
           const copy = res.clone();
