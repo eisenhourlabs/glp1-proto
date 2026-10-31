@@ -28,7 +28,8 @@ def main(argv=None):
     rows = rows_for_upload(content, 0)
     settings = {s["key"]: s["value"] for s in content["settings"]}
     out = {"library": rows["content_exercises"], "templates": rows["content_templates"], "slots": rows["content_slots"],
-           "setups": rows["content_setups"], "warmups": rows["content_warmups"], "settings": settings}
+           "setups": rows["content_setups"], "warmups": rows["content_warmups"],
+           "equipment": rows["content_equipment"], "settings": settings}
     Path(args.out).write_text(json.dumps(out, indent=1), encoding="utf-8")
     print(f"wrote {args.out}: {len(out['library'])} exercises, {len(out['slots'])} slots")
 
