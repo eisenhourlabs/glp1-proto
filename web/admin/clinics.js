@@ -41,7 +41,8 @@ function clinicCard(c, refresh) {
   const codes = h('ul', { class: 'list' });
   const paintCodes = () => {
     clear(codes).append(...(c.clinic_codes || []).map((k) => h('li', { class: 'row between' },
-      h('span', {}, h('code', {}, k.code), ' ', pill(k.active ? 'active' : 'off', k.active ? 'active' : '')),
+      h('span', {}, h('code', {}, k.code), ' ', pill(k.active ? 'active' : 'off', k.active ? 'active' : ''),
+        k.active ? [' ', h('a', { href: `#kit/${encodeURIComponent(k.code)}` }, 'Staff kit')] : null),
       secondary(k.active ? 'Turn off' : 'Turn on', async () => {
         try { await setCodeActive(k.code, !k.active); k.active = !k.active; paintCodes(); }
         catch (e) { console.error(e); msg.textContent = 'Couldn’t change the code.'; }

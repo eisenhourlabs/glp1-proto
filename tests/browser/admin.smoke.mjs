@@ -83,6 +83,13 @@ const card = page.locator('section.card', { has: page.getByRole('heading', { nam
 await card.locator('input[aria-label^="New code"]').fill('north-1');
 await card.getByRole('button', { name: 'Add code' }).click();
 await page.getByText('NORTH-1').waitFor(); await snap('04-clinics');
+await page.locator('section.card', { hasText: 'Lakeside' }).getByRole('link', { name: 'Staff kit' }).click();
+await page.getByRole('heading', { name: 'Staff kit · LAKESIDE' }).waitFor();
+await page.locator('.kit-poster svg').waitFor(); await snap('04b-kit');
+if ((await page.locator('.kit-sheet svg').count()) !== 5) fail('4 cards + 1 poster QR codes');
+if (!(await page.getByText('join.html?code=LAKESIDE').count())) fail('join link shown');
+await page.getByRole('link', { name: '← Clinics' }).click();
+await page.getByRole('heading', { name: 'Clinics', exact: true }).waitFor();
 
 await page.getByRole('link', { name: 'Settings' }).click();
 await page.getByRole('heading', { name: 'Settings' }).waitFor();

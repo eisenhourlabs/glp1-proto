@@ -1,6 +1,6 @@
 // Page shell: demo banner, sign-in form, role gate. Each entry page calls mountShell().
 import { CONFIG, isConfigured } from '../config.js';
-import { db, getProfile, signIn, signOut, sendPasswordReset, homeUrl } from './supa.js';
+import { db, getProfile, signIn, signOut, sendPasswordReset, homeUrl, APP_ROOT } from './supa.js';
 import { h, clear } from './dom.js';
 
 /**
@@ -22,7 +22,7 @@ export async function mountShell({ title, allowedRoles, render }) {
   const show = async () => {
     let profile = null;
     try { profile = await getProfile(); } catch (e) { console.error(e); }
-    if (!profile) return renderSignIn(root, title, show);
+    if (!profile) return renderSignIn(root, title, show, allowedRoles.includes('patient'));
     if (!profile.role) {
       return clear(root).append(card('Account not set up yet',
         'Your login works, but your account has not been set up. Please contact the program team.', signOutButton()));
@@ -37,12 +37,12 @@ export async function mountShell({ title, allowedRoles, render }) {
   };
 
   db.auth.onAuthStateChange((event) => {
-    if (event === 'SIGNED_OUT') renderSignIn(root, title, show);
+    if (event === 'SIGNED_OUT') renderSignIn(root, title, show, allowedRoles.includes('patient'));
   });
   await show();
 }
 
-function renderSignIn(root, title, onSignedIn) {
+function renderSignIn(root, title, onSignedIn, offerJoin = false) {
   const email = h('input', { type: 'email', id: 'email', autocomplete: 'email', required: true });
   const pw = h('input', { type: 'password', id: 'password', autocomplete: 'current-password', required: true });
   const msg = h('p', { class: 'form-msg', role: 'status' });
@@ -64,7 +64,8 @@ function renderSignIn(root, title, onSignedIn) {
     catch (err) { msg.textContent = 'That email and password didn’t match. Please try again.'; }
   });
   clear(root).append(h('section', { class: 'card narrow' },
-    h('h1', {}, CONFIG.BRAND_NAME), h('p', { class: 'muted' }, title), form));
+    h('h1', {}, CONFIG.BRAND_NAME), h('p', { class: 'muted' }, title), form,
+    offerJoin ? h('p', { class: 'small center' }, h('a', { href: new URL('join.html', APP_ROOT).href }, 'New here? Join with your clinic code')) : null));
 }
 
 export function signOutButton() {

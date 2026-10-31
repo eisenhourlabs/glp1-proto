@@ -1,7 +1,7 @@
 // Shared setup for the browser smoke tests: a static server for web/, Playwright, the fake Supabase, and a seed
 // built from the private content export. Not part of `npm test` (needs Chromium and the private content).
 import { createRequire } from 'node:module';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, join } from 'node:path';
 import { execSync } from 'node:child_process';
@@ -11,6 +11,10 @@ export const { chromium } = require(join(execSync('npm root -g').toString().trim
 
 const ROOT = new URL('../../web/', import.meta.url).pathname;
 const FAKE = readFileSync(new URL('./fake_supabase.js', import.meta.url), 'utf8');
+// The QR library from the CDN, served from a global npm install when present (npm i -g qrcode-generator@2.0.4).
+const QR_PATH = join(execSync('npm root -g').toString().trim(), 'qrcode-generator', 'dist', 'qrcode.mjs');
+const QR = existsSync(QR_PATH) ? readFileSync(QR_PATH, 'utf8')
+  : 'export default function qrcode() { return { addData() {}, make() {}, getModuleCount: () => 21, isDark: (r, c) => (r + c) % 2 === 0 }; }';
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json', '.png': 'image/png' };
 
 export function serve(port) {
@@ -45,7 +49,7 @@ export async function openApp(browser, name, seedData, { shots, time } = {}) {
   const errors = [];
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
   await ctx.addInitScript((s) => { window.__FAKE_SEED__ = s; }, seedData);
-  await ctx.route('https://cdn.jsdelivr.net/**', (r) => r.fulfill({ contentType: 'text/javascript', body: FAKE }));
+  await ctx.route('https://cdn.jsdelivr.net/**', (r) => r.fulfill({ contentType: 'text/javascript', body: r.request().url().includes('qrcode-generator') ? QR : FAKE }));
   const page = await ctx.newPage();
   if (time) await page.clock.setFixedTime(new Date(time));
   page.on('pageerror', (e) => errors.push(`${name}: ${e.message}`));
