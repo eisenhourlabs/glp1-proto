@@ -109,6 +109,8 @@ def cmd_create_user(args) -> None:
             "id": uid, "role": args.role, "clinic_id": clinic_id,
             "display_name": args.name, "is_demo": args.demo,
         }).execute()
+        if args.role == "patient":
+            db.table("patients").insert({"id": uid}).execute()   # starts in onboarding on her first sign-in
     except Exception:
         db.auth.admin.delete_user(uid)   # don't leave a login without a profile
         raise
