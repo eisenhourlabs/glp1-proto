@@ -8,6 +8,7 @@ Run from the repo root:
   python scripts/admin_cli.py create-user --email you@example.com --role admin --name Troy --check
   python scripts/admin_cli.py create-user --email pat@example.com --role patient --clinic "Lakeside Weight & Wellness" --name Dana --demo
   python scripts/admin_cli.py list
+  python scripts/admin_cli.py migrations        # which supabase/migrations files are applied vs still to paste
 
 --check prints what would happen and changes nothing.
 create-user asks for the password interactively (or generates one with --generate-password).
@@ -21,7 +22,7 @@ import secrets
 import string
 import sys
 
-from _env import admin_client, require
+from _env import REPO_ROOT, admin_client, require
 
 ROLES = ("patient", "admin", "clinic_viewer")
 CODE_RE = re.compile(r"^[A-Z0-9-]{4,24}$")
@@ -120,6 +121,39 @@ def cmd_list(args) -> None:
         print(f"  {p['role']:<13} {p.get('display_name') or '—'}{' (demo)' if p['is_demo'] else ''} · {clinic}")
 
 
+def migration_files() -> list[tuple[str, str]]:
+    """(version, filename) for every migration file, in apply order."""
+    out = []
+    for f in sorted((REPO_ROOT / "supabase" / "migrations").glob("*.sql")):
+        m = re.match(r"^(\d{14})_.+\.sql$", f.name)
+        if m:
+            out.append((m.group(1), f.name))
+    return out
+
+
+def cmd_migrations(args) -> None:
+    files = migration_files()
+    db = admin_client()
+    try:
+        applied = {r["version"] for r in db.table("app_migrations").select("version").execute().data}
+    except Exception:
+        applied = None
+    if applied is None:
+        print("The migration log table doesn't exist yet. Apply 20261031000200_migration_log.sql first")
+        print("(it also records 20261031000100_core_access.sql as applied).")
+        return
+    pending = [(v, n) for v, n in files if v not in applied]
+    for v, n in files:
+        print(f"  {'applied ' if v in applied else 'PENDING '} {n}")
+    unknown = sorted(applied - {v for v, _ in files})
+    if unknown:
+        print(f"  ! applied in the database but no file in this folder (git pull?): {', '.join(unknown)}")
+    if pending:
+        print("\nTo apply: Supabase → SQL Editor → New query → paste each PENDING file's full contents → Run, in the order above.")
+    else:
+        print("\nDatabase is up to date.")
+
+
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -142,6 +176,8 @@ def main(argv=None) -> None:
     s.set_defaults(fn=cmd_create_user)
 
     s = sub.add_parser("list"); s.set_defaults(fn=cmd_list)
+
+    s = sub.add_parser("migrations"); s.set_defaults(fn=cmd_migrations)
 
     args = ap.parse_args(argv)
     args.fn(args)

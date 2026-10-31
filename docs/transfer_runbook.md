@@ -16,12 +16,12 @@ Goal: move the app to accounts owned by Brad's company **without touching any ot
 
 ## 2. Database (path A)
 - [ ] Create the project(s) in Brad's org (Pro plan for prod: backups). HIPAA add-on / BAA if the attorney requires it.
-- [ ] `npx supabase link --project-ref <new-ref>` → `npx supabase db push`.
+- [ ] Apply every file in `supabase/migrations/` **in filename order** via SQL Editor (or the CLI, see `node_cli_later.md`). `admin_cli.py migrations` must say up to date.
 - [ ] Re-apply every row in `supabase_settings.md` (auth URLs, sign-up off, SMTP, storage buckets, secrets, cron).
 - [ ] Create real admin logins (`admin_cli.py create-user --role admin`).
 - [ ] Import content: `python scripts/import_content.py` (from the private content folder).
 - [ ] Re-create clinics, codes and branding for real clinics only (no demo clinics in prod; demo goes to staging).
-- [ ] Deploy Edge Functions: `npx supabase functions deploy <name>` for each folder in `supabase/functions/`.
+- [ ] Deploy Edge Functions: for each folder in `supabase/functions/`, create the function in Dashboard → Edge Functions and paste the code (or `supabase functions deploy` if the CLI is in use).
 
 ## 3. Configuration and secrets
 - [ ] `web/config.js`: new `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `ENV`, `BRAND_NAME`, `DEMO_BANNER` (false in prod).

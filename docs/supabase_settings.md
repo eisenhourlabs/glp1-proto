@@ -5,7 +5,7 @@ Everything in the hosted project that is **not** in a migration. Re-apply this l
 | Area | Setting | Prototype value | Why |
 |---|---|---|---|
 | Project (create form) | Name / region | `glp1-proto` · Americas (or West US/Oregon via "Need a specific region?") | |
-| | GitHub (optional) | **Not connected** | Migrations are applied with the CLI; keeps the repo transfer simple |
+| | GitHub (optional) | **Not connected** | Migrations are pasted into the SQL Editor; keeps the repo transfer simple |
 | | Enable Data API | **On** | The web app talks to the database through it |
 | | Automatically expose new tables | **Off** | Every migration grants privileges explicitly (incl. service_role) |
 | | Enable automatic RLS | **On** | Safety net; migrations also enable RLS explicitly |

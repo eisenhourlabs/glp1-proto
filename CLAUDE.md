@@ -11,11 +11,11 @@ This repo is the **GLP-1 clinic strength program prototype**. It is a separate p
 6. **Demo data only.** No real patient data in this deployment.
 
 ## Database
-- The schema source of truth is `supabase/migrations/`. **Never edit a migration that has been applied.** Add a new one (`YYYYMMDDHHMMSS_name.sql`).
+- The schema source of truth is `supabase/migrations/`. **Never edit a migration that has been applied.** Add a new one (`YYYYMMDDHHMMSS_name.sql`) **from `_TEMPLATE.sql.txt`**: it opens with a run-once guard and ends by inserting its version into `public.app_migrations`.
 - **Every new table:** RLS enabled, explicit grants (revoke from anon/authenticated first; **grant service_role explicitly**, since the project has "Automatically expose new tables" off), and policies **with a test** in `supabase/tests/NNN_*.test.sql`.
 - Clinic viewers never get table access to patient data. They get report functions that return aggregates plus the consented engagement row.
 - Run `bash scripts/test_db.sh` (a throwaway local Postgres) before proposing any migration.
-- The AI sandbox cannot reach Supabase. **Troy applies migrations** (`npx supabase db push`) and runs operator scripts. Give him exact commands, and add `--check` dry runs to every script that writes.
+- The AI sandbox cannot reach Supabase. **Troy applies migrations by pasting each file into the Supabase SQL Editor** (no Node/CLI; see `docs/node_cli_later.md`) and runs operator scripts with `.venv\Scripts\python.exe`. Tell him exactly which file(s) to paste; `admin_cli.py migrations` shows what's pending. Add `--check` dry runs to every script that writes.
 
 ## Code
 - Plain ES modules, no build step. **No file over ~400 lines.** Split by feature.
