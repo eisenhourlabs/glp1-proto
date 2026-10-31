@@ -79,10 +79,18 @@ def _password(args) -> str:
         pw = "".join(secrets.choice(alphabet) for _ in range(14))
         print(f"Generated password: {pw}   (store it; it won't be shown again)")
         return pw
-    pw = getpass.getpass("Password for the new login (min 8 chars): ")
-    if len(pw) < 8 or pw != getpass.getpass("Repeat password: "):
-        sys.exit("Passwords must match and be at least 8 characters.")
-    return pw
+    print("Type the password and press Enter. Nothing appears while you type, which is normal.")
+    print("(Pasting with Ctrl+V often doesn't work in this prompt; type it, or rerun with --generate-password.)")
+    for _ in range(3):
+        pw = getpass.getpass("Password for the new login (min 8 chars): ")
+        if len(pw) < 8:
+            print(f"  That was {len(pw)} characters; it needs at least 8. Try again.")
+            continue
+        if pw != getpass.getpass("Repeat password: "):
+            print("  The two entries didn't match. Try again.")
+            continue
+        return pw
+    sys.exit("No password set after 3 tries; nothing was created.")
 
 
 def cmd_create_user(args) -> None:
