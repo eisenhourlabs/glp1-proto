@@ -1,0 +1,17 @@
+-- NNN · <what this migration does>
+-- Apply: Supabase → SQL Editor → paste this whole file → Run. Then: python scripts/admin_cli.py migrations
+
+begin;
+
+-- Guard: refuse to run twice.
+do $$ begin
+  if exists (select 1 from public.app_migrations where version = 'YYYYMMDDHHMMSS') then
+    raise exception 'Migration YYYYMMDDHHMMSS is already applied — nothing to do.';
+  end if;
+end $$;
+
+-- … schema changes here (RLS on, explicit grants incl. service_role, policies + a test in supabase/tests/) …
+
+insert into public.app_migrations (version, name) values ('YYYYMMDDHHMMSS', 'short_name');
+
+commit;
