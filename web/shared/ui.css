@@ -92,3 +92,42 @@ input, select, textarea {
 table.data { width: 100%; border-collapse: collapse; font-size: .95rem; }
 table.data th, table.data td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); }
 @media (min-width: 900px) { main.wide { max-width: 1100px; } }
+
+/* ── Patient flows ───────────────────────────────────────────────────────── */
+.step { padding: 4px 0 24px; }
+.step h1 { margin-top: 8px; }
+.step h2 { font-size: 1rem; margin: 18px 0 4px; }
+.lead { font-size: 1.05rem; color: var(--text-muted); }
+.small { font-size: .875rem; }
+.center { text-align: center; }
+.progress { height: 6px; background: var(--surface-2); border-radius: 99px; overflow: hidden; margin: 8px 0 16px; }
+.progress span { display: block; height: 100%; background: var(--clinic-accent); border-radius: 99px; transition: width .25s ease; }
+.actions { display: flex; gap: 10px; justify-content: space-between; margin-top: 20px; position: sticky; bottom: 0;
+  padding: 12px 0 max(8px, env(safe-area-inset-bottom)); background: linear-gradient(to top, var(--bg) 70%, transparent); }
+.actions .btn-primary { flex: 1; }
+.choices { display: grid; gap: 8px; }
+.choices.cols-2 { grid-template-columns: repeat(2, 1fr); }
+.choices.cols-3 { grid-template-columns: repeat(3, 1fr); }
+.choices.cols-4 { grid-template-columns: repeat(4, 1fr); }
+.choice {
+  font: inherit; text-align: left; min-height: var(--tap); padding: 12px 14px; border-radius: var(--radius-sm);
+  border: 1.5px solid var(--line); background: var(--surface); color: var(--text); cursor: pointer;
+  display: flex; flex-direction: column; gap: 2px; justify-content: center;
+}
+.choices.cols-3 .choice, .choices.cols-4 .choice { text-align: center; align-items: center; padding: 10px 6px; }
+.choice[aria-pressed="true"] { border-color: var(--clinic-accent); background: color-mix(in srgb, var(--clinic-accent) 12%, var(--surface)); font-weight: 600; }
+.choice-hint { font-size: .8rem; color: var(--text-muted); font-weight: 400; }
+.q { padding: 6px 0; }
+.q > p { margin-bottom: 8px; font-weight: 500; }
+.card.soft { background: var(--surface-2); box-shadow: none; }
+.card.soft ul, ul.card.soft { margin: 0; padding-left: 20px; }
+.card.soft li { margin: 4px 0; }
+.sign span { font-weight: 600; font-size: .95rem; }
+textarea { font: inherit; color: inherit; background: var(--surface); width: 100%; padding: 10px 12px;
+  border: 1.5px solid var(--line); border-radius: var(--radius-sm); }
+.hero .eyebrow { color: var(--clinic-accent); font-weight: 600; font-size: .85rem; margin: 0 0 4px; letter-spacing: .02em; }
+.goal { color: var(--text-muted); margin: 0; }
+.exlist { margin: 0; padding-left: 22px; }
+.exlist li { margin: 6px 0; }
+.exname { font-weight: 500; }
+.note { display: block; font-size: .85rem; color: var(--text-muted); }
