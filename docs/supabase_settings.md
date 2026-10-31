@@ -10,7 +10,7 @@ Everything in the hosted project that is **not** in a migration. Re-apply this l
 | | Automatically expose new tables | **Off** | Every migration grants privileges explicitly (incl. service_role) |
 | | Enable automatic RLS | **On** | Safety net; migrations also enable RLS explicitly |
 | Authentication → Sign In / Providers | Email provider | On | Email + password login |
-| | Allow new users to sign up | **Off** | Logins are created by `admin_cli.py` (later by the enrollment Edge Function); no open sign-up |
+| | Allow new users to sign up | **Off** | Patients join through the `enroll` Edge Function (clinic code checked server-side); staff logins come from `admin_cli.py`. No open sign-up |
 | | Confirm email | Default | Users created by the script are pre-confirmed |
 | Authentication → URL Configuration | Site URL | `https://eisenhourlabs.github.io/glp1-proto/` | Base for auth email links |
 | | Redirect URLs | `https://eisenhourlabs.github.io/glp1-proto/**` | Allows `reset.html` as the password-reset landing page |
@@ -18,6 +18,7 @@ Everything in the hosted project that is **not** in a migration. Re-apply this l
 | | Reset-password template | Default | **Pilot:** branded copy |
 | Project Settings → API | Exposed schemas | `public` (default) | |
 | Storage | Buckets | none yet | `media` (exercise demos) and `branding` (clinic logos) come in later migrations |
-| Edge Functions | Secrets | none yet | Later: `ANTHROPIC_API_KEY`, VAPID keys |
+| Edge Functions | `enroll` | Deployed from `supabase/functions/enroll/index.ts` (Dashboard → Edge Functions → Deploy a new function → Via Editor, name `enroll`). **Verify JWT: Off** (the join page calls it with the publishable key) | Clinic-code self-enrollment. Uses the injected `SUPABASE_URL` and secret key; no secrets to add. **Pilot:** add a CAPTCHA (e.g. Turnstile) and a per-code daily cap |
+| | Secrets | none yet | Later: `ANTHROPIC_API_KEY`, VAPID keys |
 | Database | Extensions | defaults (`pgcrypto`, `pg_cron` later) | |
 | Billing | Plan | Free (pauses after ~7 days idle; unpause in the dashboard) | **Pilot:** Pro (backups) in Brad's org |

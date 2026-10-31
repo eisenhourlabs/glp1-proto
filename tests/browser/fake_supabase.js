@@ -60,6 +60,11 @@ const me = () => S.session?.user?.id;
 const patient = () => T('patients').find((p) => p.id === me());
 const RPC = {
   content_current_version: () => 1,
+  clinic_branding_for_code: ({ p_code }) => {
+    const k = T('clinic_codes').find((x) => x.code === String(p_code).toUpperCase() && x.active !== false);
+    const c = k && T('clinics').find((x) => x.id === k.clinic_id && (x.status ?? 'active') === 'active');
+    return c ? [{ clinic_name: c.name, short_name: c.short_name ?? null, accent_color: c.accent_color ?? null, logo_path: null }] : [];
+  },
   clinic_report: () => S.rpc?.clinic_report ?? null,
   clinic_checkin_list: () => S.rpc?.clinic_checkin_list ?? [],
   admin_set_patient_status: ({ p_patient, p_status, p_note }) => { const p = T('patients').find((x) => x.id === p_patient); if (p.status === 'onboarding') throw new Error('onboarding'); if (p_status === 'active' && p.screening_flag === 'pause') p.screening_flag = 'cleared'; p.status = p_status; T('adjustments').push({ id: nextId++, patient_id: p_patient, type: 'status', reason: p_note || 'admin change', detail: { to: p_status }, created_at: new Date().toISOString() }); return p_status; },
@@ -72,6 +77,24 @@ export function createClient() {
   const listeners = [];
   return {
     from: (t) => new Q(t),
+    functions: {
+      // The enroll Edge Function, in memory.
+      invoke: async (name, { body }) => {
+        const fail = (error) => ({ data: null, error: { context: { json: async () => ({ error }) } } });
+        if (name !== 'enroll') return fail('server');
+        const k = T('clinic_codes').find((x) => x.code === body.code && x.active !== false);
+        if (!k) return fail('code');
+        S.users ??= [];
+        if (S.users.some((u) => u.email === body.email.toLowerCase())) return fail('exists');
+        const id = `u${nextId++}`;
+        S.users.push({ id, email: body.email.toLowerCase(), password: body.password });
+        T('profiles').push({ id, role: 'patient', clinic_id: k.clinic_id, display_name: body.name, created_at: new Date().toISOString() });
+        T('patients').push({ id, status: 'onboarding', screening_flag: 'none', equipment: [], workarounds: [], restrictions: [], preferred_days: [],
+          pattern_levels: {}, workout1_check: {}, dumbbells_available: [], floor_ok: false });
+        save();
+        return { data: { ok: true }, error: null };
+      },
+    },
     rpc: async (name, args) => { const data = RPC[name](args || {}); save(); return { data, error: null }; },
     auth: {
       getSession: async () => ({ data: { session: S.session } }),

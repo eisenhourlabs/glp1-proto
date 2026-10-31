@@ -21,7 +21,8 @@ Goal: move the app to accounts owned by Brad's company **without touching any ot
 - [ ] Create real admin logins (`admin_cli.py create-user --role admin`).
 - [ ] Import content: `python scripts/import_content.py` (from the private content folder).
 - [ ] Re-create clinics, codes and branding for real clinics only (no demo clinics in prod; demo goes to staging).
-- [ ] Deploy Edge Functions: for each folder in `supabase/functions/`, create the function in Dashboard → Edge Functions and paste the code (or `supabase functions deploy` if the CLI is in use).
+- [ ] Deploy Edge Functions: for each folder in `supabase/functions/`, create the function in Dashboard → Edge Functions and paste the code (or `supabase functions deploy` if the CLI is in use). `enroll`: **Verify JWT off**.
+- [ ] Reprint staff kits (Admin → Clinics → Staff kit): the QR codes point at the old address.
 
 ## 3. Configuration and secrets
 - [ ] `web/config.js`: new `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `ENV`, `BRAND_NAME`, `DEMO_BANNER` (false in prod).
@@ -32,7 +33,7 @@ Goal: move the app to accounts owned by Brad's company **without touching any ot
 ## 4. Smoke test
 - [ ] `npm test` and `bash scripts/test_db.sh` pass.
 - [ ] Admin login works; clinics list loads.
-- [ ] Clinic code lookup works on the enrollment page.
+- [ ] Clinic code lookup works on the enrollment page (`join.html?code=…`), and a test sign-up lands in onboarding.
 - [ ] Demo patient (staging) can sign in, open a workout, log a set, finish the session.
 - [ ] Clinic viewer sees only aggregates.
 - [ ] Password reset email arrives and `reset.html` sets a new password.

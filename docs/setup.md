@@ -67,6 +67,15 @@ Set `GLP1_CONTENT_DIR` in `.env` to the private content folder (the one holding 
 Every import creates a **new content version**; patients keep the version their cycle started on. Close the workbook in Excel before importing.
 Settings rows are only added if missing (admin-tuned values are kept) unless `--reset-settings`.
 
+## 8. Patient self-enrollment (the `enroll` Edge Function)
+1. Supabase → **Edge Functions** → **Deploy a new function** → **Via Editor**.
+2. Name it `enroll`, replace the sample code with all of `supabase/functions/enroll/index.ts`, and click **Deploy**.
+3. Open the function → **Details** (or Settings) → turn **Verify JWT** ("Enforce JWT verification") **off** → Save.
+4. Try it: open `join.html?code=YOURCODE` on the site, create an account, and you should land in onboarding.
+
+Leave Authentication → "Allow new users to sign up" **off**: this function is the only way in, and it checks the code.
+Staff kits (printable cards and a poster with a QR code) are in Admin → Clinics → Staff kit next to each active code.
+
 ## Everyday
 ```powershell
 git pull                                                   # get merged changes
@@ -81,5 +90,6 @@ python scripts/export_content_json.py --out ../content.local.json
 node tests/browser/onboarding.smoke.mjs ../content.local.json [screenshot-dir]
 node tests/browser/workout.smoke.mjs ../content.local.json [screenshot-dir]
 node tests/browser/admin.smoke.mjs ../content.local.json [screenshot-dir]
+node tests/browser/join.smoke.mjs ../content.local.json [screenshot-dir]
 ```
-They run the real pages against an in-memory fake of Supabase (`tests/browser/fake_supabase.js`).
+They run the real pages against an in-memory fake of Supabase (`tests/browser/fake_supabase.js`). For real QR codes in the staff-kit test: `npm i -g qrcode-generator@2.0.4`.
