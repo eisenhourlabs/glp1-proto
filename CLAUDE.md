@@ -12,7 +12,7 @@ This repo is the **GLP-1 clinic strength program prototype**. It is a separate p
 
 ## Database
 - The schema source of truth is `supabase/migrations/`. **Never edit a migration that has been applied.** Add a new one (`YYYYMMDDHHMMSS_name.sql`).
-- **Every new table:** RLS enabled, explicit grants (revoke from anon/authenticated first), and policies **with a test** in `supabase/tests/NNN_*.test.sql`.
+- **Every new table:** RLS enabled, explicit grants (revoke from anon/authenticated first; **grant service_role explicitly**, since the project has "Automatically expose new tables" off), and policies **with a test** in `supabase/tests/NNN_*.test.sql`.
 - Clinic viewers never get table access to patient data. They get report functions that return aggregates plus the consented engagement row.
 - Run `bash scripts/test_db.sh` (a throwaway local Postgres) before proposing any migration.
 - The AI sandbox cannot reach Supabase. **Troy applies migrations** (`npx supabase db push`) and runs operator scripts. Give him exact commands, and add `--check` dry runs to every script that writes.

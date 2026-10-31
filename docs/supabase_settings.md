@@ -4,7 +4,11 @@ Everything in the hosted project that is **not** in a migration. Re-apply this l
 
 | Area | Setting | Prototype value | Why |
 |---|---|---|---|
-| Project | Name / region | `glp1-proto` · West US (Oregon) | |
+| Project (create form) | Name / region | `glp1-proto` · Americas (or West US/Oregon via "Need a specific region?") | |
+| | GitHub (optional) | **Not connected** | Migrations are applied with the CLI; keeps the repo transfer simple |
+| | Enable Data API | **On** | The web app talks to the database through it |
+| | Automatically expose new tables | **Off** | Every migration grants privileges explicitly (incl. service_role) |
+| | Enable automatic RLS | **On** | Safety net; migrations also enable RLS explicitly |
 | Authentication → Sign In / Providers | Email provider | On | Email + password login |
 | | Allow new users to sign up | **Off** | Logins are created by `admin_cli.py` (later by the enrollment Edge Function); no open sign-up |
 | | Confirm email | Default | Users created by the script are pre-confirmed |

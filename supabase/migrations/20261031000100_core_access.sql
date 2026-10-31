@@ -102,6 +102,11 @@ $$;
 revoke all on public.clinics, public.clinic_codes, public.profiles, public.app_settings from anon;
 revoke all on public.clinics, public.clinic_codes, public.profiles, public.app_settings from authenticated;
 
+-- service_role (operator scripts, Edge Functions) gets explicit grants: the project is created with
+-- "Automatically expose new tables" OFF, so nothing is granted implicitly to any API role.
+grant select, insert, update, delete on public.clinics, public.clinic_codes, public.profiles, public.app_settings to service_role;
+grant execute on function public.my_role(), public.is_admin(), public.my_clinic_id(), public.clinic_branding_for_code(text) to service_role;
+
 grant select, insert, update, delete on public.clinics, public.clinic_codes, public.app_settings to authenticated;
 grant select on public.profiles to authenticated;
 grant update (display_name) on public.profiles to authenticated;   -- only column a user may change on her own row

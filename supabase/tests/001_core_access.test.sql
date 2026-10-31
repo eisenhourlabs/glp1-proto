@@ -134,4 +134,14 @@ do $$ declare n int; begin
 end $$;
 reset role;
 
+-- ── service_role (operator scripts) ────────────────────────────────────────
+set role service_role;
+do $$ declare n int; begin
+  select count(*) into n from public.profiles;            assert n = 5, 'service_role sees all profiles';
+  insert into public.clinics (name) values ('Clinic via script');
+  update public.profiles set role = 'clinic_viewer' where id = '00000000-0000-0000-0000-0000000000a2';
+  get diagnostics n = row_count;                          assert n = 1, 'service_role can change roles';
+end $$;
+reset role;
+
 select 'ALL 001 RLS TESTS PASSED' as result;
