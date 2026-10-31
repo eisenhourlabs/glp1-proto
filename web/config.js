@@ -6,8 +6,8 @@
 
 export const CONFIG = Object.freeze({
   ENV: 'prototype',                       // 'prototype' | 'staging' | 'production'
-  SUPABASE_URL: 'REPLACE_ME',             // e.g. https://abcdefghijklmnop.supabase.co
-  SUPABASE_PUBLISHABLE_KEY: 'REPLACE_ME', // publishable / anon key
+  SUPABASE_URL: 'https://xfkwcobapjbeczoxffjf.supabase.co',
+  SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_NEkzAeKoGw0Tamlp54ufKA_sNamsRFI', // publishable key (public by design)
   BRAND_NAME: 'Strength Practice',        // placeholder until the product is named
   STORAGE_PREFIX: 'glp1proto',            // prefixes localStorage keys, IndexedDB and caches
   DEMO_BANNER: true,                      // shows "Prototype — demo data only"
