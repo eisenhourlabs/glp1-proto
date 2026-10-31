@@ -38,6 +38,7 @@ See `docs/setup.md`.
 ```
 npm test                 # engine + static checks (CI and AI sessions; not needed on the operator machine)
 bash scripts/test_db.sh  # migrations + RLS tests against a throwaway local Postgres
+python -m unittest discover -s tests/py   # content importer tests
 
 # operator machine (Windows): apply migrations by pasting them into the Supabase SQL Editor
 .venv\Scripts\python.exe scripts\admin_cli.py migrations

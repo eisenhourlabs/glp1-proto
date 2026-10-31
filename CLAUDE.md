@@ -22,7 +22,8 @@ This repo is the **GLP-1 clinic strength program prototype**. It is a separate p
 - `web/engine/` is pure: no DOM, no network, no Date.now() without injection. Every exported function has a unit test in `tests/engine/`.
 - UI text is set with `textContent` (via `shared/dom.js`), never `innerHTML` with data.
 - Relative URLs only (the app must work under any base path).
-- `npm test` and `bash scripts/test_db.sh` must pass before every commit or PR.
+- `npm test`, `bash scripts/test_db.sh` and `python -m unittest discover -s tests/py` must pass before every commit or PR.
+- **Content rules live in code too:** `scripts/content_check.py` encodes the Framework's contract (coverage, safety rules, dose ceilings, resolvability). When the Framework changes, change the check in the same PR.
 
 ## Workflow
 - Branch, then open a PR to `main`. Troy merges. Merging to `main` deploys to GitHub Pages.

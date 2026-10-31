@@ -57,8 +57,19 @@ Open `https://eisenhourlabs.github.io/glp1-proto/admin/` and sign in. You should
 ```
 Sign in at `https://eisenhourlabs.github.io/glp1-proto/` with the demo patient.
 
+## 7. Load the programming content
+Set `GLP1_CONTENT_DIR` in `.env` to the private content folder (the one holding `GLP1_Program_Master.xlsx`), e.g.
+`GLP1_CONTENT_DIR=C:\Users\<you>\Documents\Claude\Projects\GLP1_Clinic_App\GLP1_Clinic_App_Build\content`
+```powershell
+.\.venv\Scripts\python.exe scripts\import_content.py --check      # validate only, never connects
+.\.venv\Scripts\python.exe scripts\import_content.py              # upload as a new content version and make it current
+```
+Every import creates a **new content version**; patients keep the version their cycle started on. Close the workbook in Excel before importing.
+Settings rows are only added if missing (admin-tuned values are kept) unless `--reset-settings`.
+
 ## Everyday
 ```powershell
 git pull                                                   # get merged changes
 .\.venv\Scripts\python.exe scripts\admin_cli.py migrations   # then paste any PENDING file into the SQL Editor
+.\.venv\Scripts\python.exe scripts\import_content.py         # after editing the workbook
 ```
