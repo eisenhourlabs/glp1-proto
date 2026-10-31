@@ -33,7 +33,7 @@ export async function lastWorkoutDate(uid) {
 }
 
 export const flagsSince = async (uid, fromIso) =>
-  must(await db.from('flags').select('id,type,created_at').eq('patient_id', uid).gte('created_at', fromIso));
+  must(await db.from('flags').select('id,type,detail,created_at').eq('patient_id', uid).gte('created_at', fromIso));
 
 /** Last few logs per exercise, newest first: {exerciseId: rows}. */
 export async function exerciseHistory(uid, exerciseIds, { perExercise = 2, excludeSession = null } = {}) {
@@ -88,3 +88,16 @@ export async function updateCycleStart(cycle, day) {
   must(await db.from('cycles').update({ start_date: day }).eq('id', cycle.id));
   cycle.start_date = day;
 }
+
+/** Her post-workout check-in on the session log. fields: { feel, soreness, sore_areas, note } */
+export const saveCheckin = async (sessionLogId, fields) => must(await db.from('session_logs').update(fields).eq('id', sessionLogId));
+
+export const cycleAdjustments = async (cycleId) =>
+  must(await db.from('adjustments').select('*').eq('cycle_id', cycleId).order('id'));
+
+export const addAdjustment = async (uid, cycleId, { type, reason, detail }) =>
+  must(await db.from('adjustments').insert({ patient_id: uid, cycle_id: cycleId, type, reason, detail }));
+
+/** Every logged exercise (for strength wins). Small: a few hundred rows over a cycle. */
+export const allExerciseLogs = async (uid) =>
+  must(await db.from('exercise_logs').select('exercise_id,sets,skipped,created_at').eq('patient_id', uid).eq('skipped', false).order('created_at'));
