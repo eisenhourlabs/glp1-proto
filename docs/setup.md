@@ -73,3 +73,12 @@ git pull                                                   # get merged changes
 .\.venv\Scripts\python.exe scripts\admin_cli.py migrations   # then paste any PENDING file into the SQL Editor
 .\.venv\Scripts\python.exe scripts\import_content.py         # after editing the workbook
 ```
+
+## Browser smoke tests (developer machine with Node + Playwright)
+Not part of `npm test`: they need Chromium and the private content export.
+```
+python scripts/export_content_json.py --out ../content.local.json
+node tests/browser/onboarding.smoke.mjs ../content.local.json [screenshot-dir]
+node tests/browser/workout.smoke.mjs ../content.local.json [screenshot-dir]
+```
+They run the real pages against an in-memory fake of Supabase (`tests/browser/fake_supabase.js`).
