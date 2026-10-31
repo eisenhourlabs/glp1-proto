@@ -1,0 +1,21 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# python
+__pycache__/
+*.pyc
+.venv/
+
+# node
+node_modules/
+
+# supabase cli local state
+supabase/.temp/
+supabase/.branches/
+
+# local scratch
+*.local.*
+.DS_Store
+Thumbs.db

@@ -1,0 +1,12 @@
+{
+  "name": "glp1-proto",
+  "private": true,
+  "type": "module",
+  "description": "GLP-1 clinic strength program prototype",
+  "scripts": {
+    "test": "node --test \"tests/**/*.test.js\""
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
