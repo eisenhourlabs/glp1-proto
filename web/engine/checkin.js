@@ -37,7 +37,8 @@ export function daysToNextCheckpoint(cycleStart, week, today) {
 export function checkinActions({ logs, flags = [], adjustments = [], cycle, week, perWeek = 0, today, lastLogId, settings }) {
   const checks = checksFromLogs(logs, flags.filter((f) => f.type === 'pain'));
   const active = activeAdjustments({ adjustments, logs, week });
-  const lighterUsed = adjustments.some((a) => a.type === 'lighter_week_next')
+  // A lighter week already scheduled for next week answers this week's trigger; only an earlier one makes this a second.
+  const lighterUsed = adjustments.some((a) => a.type === 'lighter_week_next' && a.detail?.week !== week + 1)
     || Object.values(cycle.week_modes || {}).some((m) => m?.mode === 'lighter' || m?.mode === 'deload');
   const proposed = checkinAdjustments(checks, {
     today, thisWeekChecks: checks.filter((c) => c.week === week), plannedThisWeek: perWeek, lighterWeekUsedThisCycle: lighterUsed,

@@ -86,6 +86,20 @@ Staff kits (printable cards and a poster with a QR code) are in Admin → Clinic
 The function file is generated from `supabase/functions_src/ai-cycle-review/` and the engine. After changing either, run
 `node scripts/build_functions.mjs` (the tests fail if the committed file is stale).
 
+## 10. Demo data for a walkthrough (Phase 6)
+The dataset `demo_seed.local.json` is built from the private content and lives in the content folder (never in this
+repo). To rebuild it (developer machine with Node): `node scripts/demo_data.mjs ../content.local.json <content folder>/demo_seed.local.json`.
+
+```
+.venv\Scripts\python.exe scripts\demo.py seed --check   # compare the dataset with the database; changes nothing
+.venv\Scripts\python.exe scripts\demo.py reset           # the morning of a demo: reload with today's dates
+.venv\Scripts\python.exe scripts\demo.py status          # how many demo logins exist
+.venv\Scripts\python.exe scripts\demo.py remove          # delete every demo login and its data
+```
+Demo logins end in `@glp1demo.example`. The ones you can sign in with (dana, maria, lisa, frontdesk, brad) use
+`GLP1_DEMO_PASSWORD` from `.env`, or the password you type when asked. The walkthrough is in the private
+`GLP1_Clinic_App_Build/Demo_Script.md`.
+
 ## Everyday
 ```powershell
 git pull                                                   # get merged changes
@@ -102,5 +116,6 @@ node tests/browser/workout.smoke.mjs ../content.local.json [screenshot-dir]
 node tests/browser/admin.smoke.mjs ../content.local.json [screenshot-dir]
 node tests/browser/join.smoke.mjs ../content.local.json [screenshot-dir]
 node tests/browser/review.smoke.mjs ../content.local.json [screenshot-dir]
+node tests/browser/demo.smoke.mjs ../content.local.json <content folder>/demo_seed.local.json [screenshot-dir]
 ```
 They run the real pages against an in-memory fake of Supabase (`tests/browser/fake_supabase.js`). For real QR codes in the staff-kit test: `npm i -g qrcode-generator@2.0.4`.
