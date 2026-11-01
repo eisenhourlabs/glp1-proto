@@ -46,6 +46,9 @@ test('checkinActions: a hard week early in the cycle → next week lighter, once
   const used = checkinActions({ logs, cycle: { ...CYCLE, week_modes: {} }, week: 1, today: '2026-11-04', lastLogId: 2,
     adjustments: [{ type: 'lighter_week_next', detail: { week: 1 } }] });
   assert.deepEqual(used.flags.map((f) => f.detail.reason), ['second_lighter_week_trigger']);
+  const sameWeek = checkinActions({ logs: [...logs, log(3, '2026-11-06', 1, { feel: 'too_hard' })], cycle: CYCLE, week: 1, perWeek: 2,
+    today: '2026-11-06', lastLogId: 3, adjustments: r.adjustments });
+  assert.deepEqual([sameWeek.adjustments.length, sameWeek.flags.length], [0, 0], 'more tough days in the same week: already handled, no flag');
 });
 
 test('checkinActions: same area 3 times in 14 days → one pattern flag', () => {
