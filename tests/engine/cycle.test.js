@@ -66,6 +66,15 @@ test('materializeCycle resolves each session, distinct exercises across the week
   assert.equal(c.skipped, 1, 'no carry exercise in the fixture library');
 });
 
+test('materializeCycle steers away from last cycle\'s exercises when there is a choice', () => {
+  const template = { template_id: 'T', sessions: [{ session: 'A', name: 'A' }] };
+  const slots = [slot('SQ', { session: 'A', slot: 'P1', ord: 1 })];
+  const profile = { equipment: GYM, patternLevels: { SQ: 3 } };
+  const first = materializeCycle(template, slots, profile, LIBRARY).sessions[0].items[0].exercise.id;
+  const fresh = materializeCycle(template, slots, profile, LIBRARY, { used: [first] }).sessions[0].items[0].exercise.id;
+  assert.notEqual(fresh, first);
+});
+
 test('chooseTemplate: 4-day only for experienced; falls back to 3-day', () => {
   const T = [
     { template_id: 'C1-3D', cycle_type: 'C1', days_per_week: 3, active: true },

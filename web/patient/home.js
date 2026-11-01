@@ -9,7 +9,7 @@ import { swapNote } from '../engine/resolve.js';
 import { activeAdjustments } from '../engine/checkin.js';
 import { loadContent, localToday } from './api.js';
 import { loadSettings, loadWarmups, cycleLogs, lastWorkoutDate, flagsSince, startSession, sessionExerciseLogs, finishSession,
-  discardSession, saveWeekMode, updateCycleStart, cycleAdjustments, skipToday } from './log_api.js';
+  discardSession, saveWeekMode, updateCycleStart, cycleAdjustments, skipToday, cycleProposal } from './log_api.js';
 import { makePlanner, warmupFor, renderReadiness } from './today.js';
 import { runWorkout } from './workout.js';
 import { COMEBACK } from './session_copy.js';
@@ -18,6 +18,8 @@ import { renderProgress } from './progress.js';
 import { installCard } from './extras.js';
 import { openSheet } from './workout_parts.js';
 import { SKIP_OPTIONS } from './session_copy.js';
+import { renderReview } from './review.js';
+import { addDays } from '../engine/util.js';
 
 const GOALS = {
   keep_muscle: 'Keep my muscle while I lose weight', everyday_strength: 'Make everyday life easier',
@@ -25,7 +27,7 @@ const GOALS = {
 };
 const DONE = new Set(['done', 'partial']);
 
-export async function renderHome(root, { patient, cycle }) {
+export async function renderHome(root, { patient, cycle, reload }) {
   const [content, settings] = await Promise.all([loadContent(), loadSettings()]);
   const today = localToday();
   let logs = await cycleLogs(cycle.id);
@@ -51,7 +53,17 @@ export async function renderHome(root, { patient, cycle }) {
   const inProgress = logs.find((l) => l.status === 'in_progress' && l.log_date === today);
   const lastDone = [...logs].reverse().find((l) => DONE.has(l.status));
   const env = { patient, cycle, content, settings, week, weekMode, comeback, holdAndTrim: active.holdAndTrim };
-  const rerender = async () => { clear(root); await renderHome(root, { patient, cycle }); window.scrollTo?.(0, 0); };
+  const rerender = async () => { clear(root); await renderHome(root, { patient, cycle, reload }); window.scrollTo?.(0, 0); };
+
+  // ── Cycle review (week 9 on, Framework §14) ──
+  const reviewOpen = rawWeek >= 9;
+  const proposal = reviewOpen ? await cycleProposal(cycle.id).catch(() => null) : null;
+  const showReview = () => {
+    clear(root);
+    renderReview(root, { patient, cycle, template, content, canStart: rawWeek >= 10 || status.complete,
+      startsOn: prettyDate(addDays(cycle.start_date, 63)), onDone: () => (reload ? reload() : rerender()) }).catch(fail);
+    window.scrollTo?.(0, 0);
+  };
 
   // ── Workout flow ──
   const begin = (session) => {
@@ -117,7 +129,12 @@ export async function renderHome(root, { patient, cycle }) {
   const notes = [];
   if (rawWeek < 1) notes.push(h('p', {}, `Your program starts on ${prettyDate(cycle.start_date)}. Want to start today instead?`),
     secondary('Start today', async () => { await updateCycleStart(cycle, today); rerender(); }));
-  if (rawWeek > 9) notes.push(h('p', {}, 'You’ve finished this cycle! Your next one is being planned. Keep going with this week’s workouts in the meantime.'));
+  if (reviewOpen) {
+    notes.push(h('p', {}, proposal ? `Your Cycle ${cycle.cycle_no + 1} plan is ready. Start it when you’re ready.`
+      : rawWeek > 9 ? 'You’ve finished this cycle! Do your 2-minute review to plan the next one.'
+        : 'Week 9: time for your cycle review. It takes about 2 minutes.'));
+    if (rawWeek === 9) notes.push(secondary(proposal ? 'See your next cycle' : 'Your cycle review', showReview));
+  }
   const modeMsg = lighterByCheckin ? 'This week is lighter so you can recharge. It still counts fully.' : weekModeMessage(decision.mode);
   if (modeMsg) notes.push(h('p', {}, modeMsg));
   if (comeback.mode !== 'none') notes.push(h('p', {}, COMEBACK[comeback.mode]));
@@ -126,6 +143,7 @@ export async function renderHome(root, { patient, cycle }) {
   let action;
   if (rawWeek < 1) action = null;
   else if (inProgress) action = primary(`Continue ${names[inProgress.session]}`, () => resume(inProgress).catch(fail));
+  else if (rawWeek >= 10) action = primary(proposal ? `Start Cycle ${cycle.cycle_no + 1}` : 'Do your cycle review', showReview);
   else if (trainedOn(logs, today)) action = h('p', { class: 'center muted' }, 'Done for today. Rest up, and the next one is ready when you are.');
   else if (status.complete) action = h('p', { class: 'center' }, 'All of this week’s workouts are done. Great week!');
   else {

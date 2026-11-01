@@ -10,8 +10,9 @@ import { renderClinics } from './clinics.js';
 import { renderSettings } from './settings.js';
 import { renderClinicReport } from '../clinic/report.js';
 import { renderKit } from './kit.js';
+import { renderAiReviews } from './ai.js';
 
-const TABS = [['patients', 'Patients'], ['flags', 'Flags'], ['clinics', 'Clinics'], ['settings', 'Settings']];
+const TABS = [['patients', 'Patients'], ['flags', 'Flags'], ['ai', 'AI reviews'], ['clinics', 'Clinics'], ['settings', 'Settings']];
 
 mountShell({
   title: 'Admin',
@@ -29,6 +30,7 @@ mountShell({
       try {
         if (name === 'patient' && arg) await renderPatient(view, { id: arg, admin: profile });
         else if (name === 'flags') await renderFlags(view, { admin: profile });
+        else if (name === 'ai') await renderAiReviews(view);
         else if (name === 'clinics') await renderClinics(view);
         else if (name === 'report' && arg) { view.append(h('p', { class: 'no-print' }, h('a', { href: '#clinics' }, '← Clinics'))); await renderClinicReport(view, { clinicId: arg }); }
         else if (name === 'kit' && arg) await renderKit(view, { code: decodeURIComponent(arg) });

@@ -37,6 +37,12 @@ t.exercise_logs = [
 t.flags = [{ id: 1, patient_id: 'u1', type: 'dizzy', detail: { session_log_id: 13 }, created_at: '2026-11-10T10:20:00Z', resolved_at: null },
   { id: 2, patient_id: 'u2', type: 'screening', detail: {}, created_at: '2026-11-03T09:00:00Z', resolved_at: null }];
 t.adjustments = [{ id: 1, patient_id: 'u1', cycle_id: 1, type: 'lighter_week_next', reason: 'low_energy_week', detail: { week: 3 }, created_at: '2026-11-12T10:00:00Z' }];
+t.ai_proposals = [{ id: 7, patient_id: 'u1', cycle_id: 1, created_at: '2026-11-03T10:00:00Z', source: 'ai', model: 'claude-sonnet-5-5', status: 'pending',
+  input_summary: { cycle: { number: 1 } }, reflection: { note: 'Knees felt great' },
+  output: { cycle_type: 'C2', days_per_week: 4, level_changes: [{ pattern: 'SQ', change: 1, evidence: 'Steady climb.' }], swaps: [], recap: 'Great cycle.', focus: 'Stronger legs', flags: [] },
+  default_output: { cycle_type: 'C2', days_per_week: 3, level_changes: [], swaps: [], recap: 'Standard recap.', focus: 'Stronger legs', flags: [] },
+  final: { cycle_type: 'C2', days_per_week: 3, level_changes: [], swaps: [], recap: 'Standard recap.', focus: 'Stronger legs', flags: [] },
+  validation: { errors: [], review: ['recommends 4 days (she chose 3)'] } }];
 t.patient_documents = [{ patient_id: 'u1', doc_type: 'consent', doc_version: 'consent-draft-2026-10-31', signed_at: '2026-11-01T10:00:00Z' }];
 
 S.users.push({ id: 'cv', email: 'clinic@demo', password: 'pw123456' });
@@ -98,6 +104,15 @@ await input.fill('12');
 await page.locator('tr', { has: input }).getByRole('button', { name: 'Save' }).click();
 await page.locator('tr', { has: input }).getByText('Saved').waitFor(); await snap('05-settings');
 
+// AI review queue
+await page.getByRole('link', { name: 'AI reviews' }).click();
+await page.getByText('Waiting for you (1)').waitFor();
+if (!(await page.getByText('recommends 4 days (she chose 3)').count())) fail('validation reason shown');
+if (!(await page.getByText('Knees felt great').count())) fail('her note shown');
+await snap('05b-ai');
+await btn('Approve AI plan').click();
+await page.getByText('Waiting for you (0)').waitFor();
+
 // Status change and the clinic report from admin
 await page.getByRole('link', { name: 'Patients' }).click();
 await page.getByRole('link', { name: 'Rosa' }).click();
@@ -111,6 +126,7 @@ const db = await fakeDb(page);
 if (!db.tables.flags.find((f) => f.id === 1).resolved_by) fail('flag not resolved');
 if (!db.tables.clinic_codes.some((k) => k.code === 'NORTH-1')) fail('code not added');
 if (db.tables.app_settings.find((s) => s.key === 'scale_today.load_cut_pct').value !== 12) fail('setting not saved');
+if (db.tables.ai_proposals[0].status !== 'approved' || db.tables.ai_proposals[0].final.days_per_week !== 4) fail('approval should apply the AI plan');
 const rosa = db.tables.patients.find((p) => p.id === 'u2');
 if (rosa.status !== 'active' || rosa.screening_flag !== 'cleared') fail('admin resume did not clear the screening pause');
 

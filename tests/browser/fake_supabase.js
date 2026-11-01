@@ -66,6 +66,7 @@ const RPC = {
     return c ? [{ clinic_name: c.name, short_name: c.short_name ?? null, accent_color: c.accent_color ?? null, logo_path: null }] : [];
   },
   clinic_report: () => S.rpc?.clinic_report ?? null,
+  admin_review_proposal: ({ p_id, p_approve, p_note }) => { const r = T('ai_proposals').find((x) => x.id === p_id); r.status = p_approve ? 'approved' : 'rejected'; r.final = p_approve ? r.output : r.default_output; r.review_note = p_note; return r.status; },
   clinic_checkin_list: () => S.rpc?.clinic_checkin_list ?? [],
   admin_set_patient_status: ({ p_patient, p_status, p_note }) => { const p = T('patients').find((x) => x.id === p_patient); if (p.status === 'onboarding') throw new Error('onboarding'); if (p_status === 'active' && p.screening_flag === 'pause') p.screening_flag = 'cleared'; p.status = p_status; T('adjustments').push({ id: nextId++, patient_id: p_patient, type: 'status', reason: p_note || 'admin change', detail: { to: p_status }, created_at: new Date().toISOString() }); return p_status; },
   patient_set_screening: ({ p_red_flag }) => { const p = patient(); if (p.status === 'onboarding') p.screening_flag = p_red_flag ? 'pause' : 'none'; },
@@ -81,6 +82,14 @@ export function createClient() {
       // The enroll Edge Function, in memory.
       invoke: async (name, { body }) => {
         const fail = (error) => ({ data: null, error: { context: { json: async () => ({ error }) } } });
+        if (name === 'ai-cycle-review') {
+          // A canned review when the seed provides one; otherwise "unreachable", so the app falls back to its own default.
+          if (!S.aiReview) return fail('server');
+          const cycle = T('cycles').find((c) => c.patient_id === me() && c.status === 'active');
+          let row = T('ai_proposals').find((p) => p.cycle_id === cycle.id);
+          if (!row) { row = { id: nextId++, patient_id: me(), cycle_id: cycle.id, source: 'ai', status: S.aiReview.status ?? 'ready', final: S.aiReview.final, reflection: body.reflection, created_at: new Date().toISOString() }; T('ai_proposals').push(row); save(); }
+          return { data: { proposal: structuredClone(row) }, error: null };
+        }
         if (name !== 'enroll') return fail('server');
         const k = T('clinic_codes').find((x) => x.code === body.code && x.active !== false);
         if (!k) return fail('code');

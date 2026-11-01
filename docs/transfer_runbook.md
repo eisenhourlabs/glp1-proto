@@ -22,6 +22,7 @@ Goal: move the app to accounts owned by Brad's company **without touching any ot
 - [ ] Import content: `python scripts/import_content.py` (from the private content folder).
 - [ ] Re-create clinics, codes and branding for real clinics only (no demo clinics in prod; demo goes to staging).
 - [ ] Deploy Edge Functions: for each folder in `supabase/functions/`, create the function in Dashboard → Edge Functions and paste the code (or `supabase functions deploy` if the CLI is in use). `enroll`: **Verify JWT off**.
+- [ ] Edge Function secrets: a **new** `ANTHROPIC_API_KEY` under Brad's Anthropic account; re-run `scripts/import_ai_brief.py`.
 - [ ] Reprint staff kits (Admin → Clinics → Staff kit): the QR codes point at the old address.
 
 ## 3. Configuration and secrets
