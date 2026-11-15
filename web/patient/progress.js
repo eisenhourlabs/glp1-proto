@@ -3,9 +3,10 @@ import { h } from '../shared/dom.js';
 import { primary } from '../shared/ui.js';
 import { weeklyCounts, streaks, strengthWins } from '../engine/progress.js';
 import { weekStreaks } from '../engine/week_streak.js';
-import { cycleLogs, allExerciseLogs } from './log_api.js';
+import { cycleLogs, allExerciseLogs, loadSettings } from './log_api.js';
 import { reminderCard } from './extras.js';
 import { WEEKLY_STREAK_NOTE } from './session_copy.js';
+import { benchmarkProgressSection } from './benchmarks_ui.js';
 
 /** ctx: { patient, cycle, template, week, library, carriedBest (best streak before a restart), onBack } */
 export async function renderProgress(root, ctx) {
@@ -16,6 +17,7 @@ export async function renderProgress(root, ctx) {
   const s = weekStreaks(weeks, ctx.week);
   s.best = Math.max(s.best, ctx.carriedBest ?? 0);   // a restart after time away (B7) keeps her best streak
   const wins = strengthWins(exLogs, ctx.library);
+  const tests = await benchmarkProgressSection({ patient: ctx.patient, settings: await loadSettings() }).catch((e) => { console.error(e); return null; });
 
   root.append(
     h('section', { class: 'card hero' },
@@ -39,6 +41,7 @@ export async function renderProgress(root, ctx) {
       wins.length
         ? h('ul', { class: 'wins' }, wins.map((w) => h('li', {}, h('span', { class: 'exname' }, w.name), h('span', { class: 'win' }, `${w.from} → ${w.to}`))))
         : h('p', { class: 'muted' }, 'After a couple of weeks, the exercises where you’ve moved up will show here.')),
+    tests,
     reminderCard(ctx.patient),
     h('div', { class: 'actions static' }, primary('Back to home', ctx.onBack)),
   );

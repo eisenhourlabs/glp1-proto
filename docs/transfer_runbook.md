@@ -21,6 +21,7 @@ Goal: move the app to accounts owned by Brad's company **without touching any ot
 - [ ] Create real admin logins (`admin_cli.py create-user --role admin`).
 - [ ] Import content: `python scripts/import_content.py` (from the private content folder).
 - [ ] Re-create clinics, codes and branding for real clinics only (no demo clinics in prod; demo goes to staging). Check each clinic's **time zone** (`clinics.timezone`, set from the browser of whoever creates it).
+- [ ] Benchmarks (B13) are built but **off**: leave `benchmarks.enabled` unset in production until the wording is approved (`docs/benchmarks.md`).
 - [ ] Decide the small-numbers threshold for clinic reports (`report.min_cell`, default 5; see `supabase_settings.md`).
 - [ ] Deploy Edge Functions: for each folder in `supabase/functions/`, create the function in Dashboard → Edge Functions and paste the code (or `supabase functions deploy` if the CLI is in use). `enroll`, `client-error` and `health`: **Verify JWT off**.
 - [ ] Edge Function secrets: a **new** `ANTHROPIC_API_KEY` under Brad's Anthropic account; re-run `scripts/import_ai_brief.py`.

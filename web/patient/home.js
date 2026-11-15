@@ -28,6 +28,7 @@ import { homeState, comebackFor, restDaySuggested } from '../engine/home_state.j
 import { findOffer, offerCard } from './offers_ui.js';
 import { screenChange } from '../shared/a11y.js';
 import { selfLighterState, selfLighterRange } from '../engine/lighter.js';
+import { benchmarkCard } from './benchmarks_ui.js';
 
 const GOALS = {
   keep_muscle: 'Keep my muscle', everyday_strength: 'Make everyday life easier',
@@ -222,7 +223,10 @@ export async function renderHome(root, { patient, cycle, reload }) {
     })),
     ended ? null : h('p', { class: 'small muted' }, 'Do them in any days that suit you. Anything not done by the end of the week simply drops off.'));
 
-  root.append(updateSlot(), hero, action ? h('div', { class: 'home-action' }, action) : null, queue,
+  // Quick strength tests (B13): only when switched on, at her second workout and in the transition weeks.
+  const tests = await benchmarkCard({ patient, cycle, settings, rawWeek, doneWorkouts: doneWeeks.length, root,
+    onDone: () => rerender() }).catch((e) => { console.error(e); return null; });
+  root.append(updateSlot(), hero, action ? h('div', { class: 'home-action' }, action) : null, tests, queue,
     h('div', { class: 'home-action' }, secondary('Your progress', showProgress)), installCard());
 
   function fail(e) { console.error(e); clear(root).append(h('section', { class: 'card' }, h('h1', {}, 'Something didn’t load'), h('p', {}, 'Check your connection, then reload.'))); }

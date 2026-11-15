@@ -7,7 +7,7 @@ import { idbGet } from '../shared/idb.js';
 import { currentUser } from './outbox.js';
 import { overlay, sameSession, sameByRef, sessionCanon, serverIdOf, withServerIds } from './overlay.js';
 
-export { startSession, skipToday, finishSession, saveCheckin, discardSession, saveExercise, raiseFlag, addAdjustment } from './log_writes.js';
+export { startSession, skipToday, finishSession, saveCheckin, discardSession, saveExercise, raiseFlag, addAdjustment, saveBenchmark } from './log_writes.js';
 
 const must = ({ data, error }) => { if (error) throw error; return data; };
 /** Saved-copy key: per user, per read. */
@@ -81,6 +81,10 @@ export async function standingInputs(uid) {
 export const flagsSince = (uid, fromIso) => refRows('flags', 'f:', k('flagsSince', fromIso),
   (q) => q.eq('patient_id', uid).gte('created_at', fromIso), (v) => String(v.created_at) >= String(fromIso),
   'id,type,detail,created_at,client_ref');
+
+/** All her benchmark results (B13), oldest first, including ones saved on this phone and not sent yet. */
+export const allBenchmarks = async (uid) => (await refRows('benchmarks', 'b:', k('benchmarks'), (q) => q.eq('patient_id', uid).order('id'),
+  (v) => v.patient_id === uid, 'id,cycle_id,moment,test,value,variant,created_at,client_ref')).sort(byCreated);
 
 export const cycleAdjustments = async (cycleId) => (await refRows('adjustments', 'a:', k('adjustments', cycleId),
   (q) => q.eq('cycle_id', cycleId).order('id'), (v) => v.cycle_id === cycleId)).sort(byCreated);
