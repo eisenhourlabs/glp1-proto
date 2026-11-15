@@ -4,9 +4,9 @@
 import { h, clear } from '../shared/dom.js';
 import { stepScreen, choices, primary, secondary, statusLine } from '../shared/ui.js';
 import { weeklyCounts, streaks, strengthWins } from '../engine/progress.js';
-import { cycleSummary, defaultProposal, proposalLines, CYCLE_NAMES } from '../engine/review.js';
+import { cycleSummary, defaultProposal, proposalLines, applyLevelChoices, patternName, levelCeilings, reviewProfile, CYCLE_NAMES } from '../engine/review.js';
 import { createNextCycle } from './api.js';
-import { cycleLogs, allExerciseLogs, myFlags, cycleAdjustments, cycleProposal, runReview } from './log_api.js';
+import { cycleLogs, allExerciseLogs, myFlags, cycleAdjustments, cycleProposal, runReview, loadSettings, addAdjustment } from './log_api.js';
 
 const WORKED = [['short_workouts', 'Short workouts'], ['getting_stronger', 'Feeling stronger'], ['schedule', 'My schedule'],
   ['energy', 'More energy'], ['checkins', 'The check-ins'], ['guidance', 'Knowing what to do']];
@@ -98,10 +98,13 @@ export async function renderReview(root, ctx) {
 }
 
 async function localDefault(ctx, reflection, logs, exLogs) {
-  const [flags, adjustments] = await Promise.all([myFlags(ctx.patient.id).catch(() => []), cycleAdjustments(ctx.cycle.id).catch(() => [])]);
+  const [flags, adjustments, settings] = await Promise.all([myFlags(ctx.patient.id).catch(() => []),
+    cycleAdjustments(ctx.cycle.id).catch(() => []), loadSettings().catch(() => ({}))]);
   const summary = cycleSummary({ patient: ctx.patient, cycle: ctx.cycle, template: ctx.template, logs, exerciseLogs: exLogs,
     flags, adjustments, library: ctx.content.library, reflection });
-  return { id: null, status: 'ready', source: 'default', final: defaultProposal(summary), reflection };
+  const setup = (ctx.content.setups || []).find((s) => s.setup === ctx.patient.setup) ?? null;
+  const ceilings = levelCeilings(reviewProfile(ctx.patient), setup, ctx.content.library.filter((e) => e.active));
+  return { id: null, status: 'ready', source: 'default', final: defaultProposal(summary, { settings, ceilings }), reflection };
 }
 
 /** The coach's notes and the plan; confirm days and length; start the next cycle. */
@@ -111,7 +114,9 @@ function planScreen(root, ctx, proposal) {
   const choice = { days: p.days_per_week ?? ctx.patient.days_per_week ?? 3,
     minutes: proposal.reflection?.minutes ?? ctx.patient.session_minutes ?? 45 };
   const msg = statusLine();
-  const lines = proposalLines(p, ctx.content.library);
+  const ups = (p.level_changes || []).filter((c) => c.change > 0);
+  const lines = proposalLines({ ...p, level_changes: (p.level_changes || []).filter((c) => c.change < 0) }, ctx.content.library);
+  const kept = new Set();
   const dayOpts = (p.cycle_type === 'C1' ? ['2', '3'] : ['2', '3', '4']).map((d) => ({ value: d, label: d }));
   root.append(stepScreen({
     title: `Cycle ${next}: ${CYCLE_NAMES[p.cycle_type]}`,
@@ -119,6 +124,13 @@ function planScreen(root, ctx, proposal) {
     body: [
       h('div', { class: 'card soft' }, h('p', {}, p.recap)),
       h('p', {}, h('strong', {}, 'Focus: '), p.focus),
+      ups.length ? h('div', { class: 'card' }, h('h2', {}, ups.length === 1 ? 'You’ve earned a step up' : 'You’ve earned some steps up'),
+        h('p', { class: 'small muted' }, 'Moving up means a slightly harder version of the exercise. Your choice.'),
+        ...ups.map((c) => h('div', { class: 'q', 'data-levelup': c.pattern },
+          h('p', {}, h('strong', {}, `${patternName(c.pattern)}: next level`), c.evidence ? h('span', { class: 'small muted' }, ` ${c.evidence}`) : null),
+          choices({ columns: 2, value: 'up', label: `${patternName(c.pattern)} level`,
+            options: [{ value: 'up', label: 'Move up' }, { value: 'keep', label: 'Keep it where it was' }],
+            onChange: (v) => { if (v === 'keep') kept.add(c.pattern); else kept.delete(c.pattern); } })))) : null,
       lines.length ? h('div', { class: 'card' }, h('h2', {}, 'What changes'), h('ul', { class: 'exlist' }, lines.map((l) => h('li', {}, l)))) : null,
       proposal.status === 'pending' ? h('p', { class: 'small muted' }, 'Your coach is double-checking a couple of details. If it’s not ready when you start, you’ll begin with the standard plan, and nothing is lost.') : null,
       h('div', { class: 'q' }, h('p', {}, 'Days a week'),
@@ -132,7 +144,9 @@ function planScreen(root, ctx, proposal) {
       e.target.disabled = true;
       msg.textContent = 'Building your next cycle…';
       try {
-        await createNextCycle(ctx.patient, ctx.cycle, p, ctx.content, { days: choice.days, minutes: choice.minutes, proposalId: proposal.id });
+        const { plan, log } = applyLevelChoices(p, [...kept], ctx.patient.pattern_levels || {}, proposal.source ?? 'default');
+        const cycle = await createNextCycle(ctx.patient, ctx.cycle, plan, ctx.content, { days: choice.days, minutes: choice.minutes, proposalId: proposal.id });
+        for (const row of log) await addAdjustment(ctx.patient.id, cycle.id, row).catch(console.error);
         ctx.onDone();
       } catch (err) { console.error(err); msg.textContent = 'Couldn’t start it. Check your connection and try again.'; e.target.disabled = false; }
     }) : null],

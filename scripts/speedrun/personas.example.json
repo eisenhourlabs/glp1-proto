@@ -47,6 +47,10 @@
      "review": {"days": 4},
      "weeks": {"2": [{"feel": "too_hard"}, {"feel": "too_hard", "energy": "low"}, {"energy": "low"}],
                "3": [{"feel": "too_hard", "energy": "low"}, {"energy": "low"}, {}],
-               "12": [{"feel": "too_hard"}, {"feel": "too_hard"}, {}, {}]}}
+               "12": [{"feel": "too_hard"}, {"feel": "too_hard"}, {}, {}]}},
+    {"key": "nora", "name": "Nora", "age_band": "50-59", "setup": "home_gym", "days": 3, "minutes": 45, "experience": "some", "check": {},
+     "workarounds": [], "restrictions": [], "floorOk": false, "strength": 0.8,
+     "story": "Shows up every week but finds most sessions too hard, all the way through.",
+     "default": [{"feel": "too_hard"}, {"feel": "too_hard"}, {}]}
   ]
 }

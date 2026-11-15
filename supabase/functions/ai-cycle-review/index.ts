@@ -52,6 +52,108 @@ const mondayOf = (iso) => addDays(iso, 1 - isoWeekday(iso));
 return { PATTERNS, LOWER_PATTERNS, AREAS, AGE_BANDS, parseRange, formatRange, clamp, isSixtyPlus, addDays, daysBetween, isoWeekday, mondayOf };
 })();
 
+// ── web/engine/levels.js ──
+const __levels = (() => {
+// Patient levels per movement pattern (Framework §5.2, §5.3, §11.2).
+
+const { PATTERNS } = __util;
+const CHECK_PATTERNS = { sitToStand: ['SQ', 'SL'], inclinePushup: ['HP'], hinge: ['HI'] };
+
+/**
+ * Starting level for every pattern from the intake answer + the Workout 1 check.
+ * experience: 'none' | 'some' | 'regular'; check: { sitToStand, inclinePushup, hinge } booleans (may be partial).
+ * Never above 3 at start; 70+ capped at 2.
+ */
+function startingLevels({ experience = 'none', check = {}, ageBand } = {}) {
+  const cap = ageBand === '70+' ? 2 : 3;
+  const allPassed = check.sitToStand && check.inclinePushup && check.hinge;
+  // Regular trainers who pass all three checks start every pattern at 3 (Framework §5.2 table).
+  const base = experience === 'none' ? 1 : experience === 'regular' && allPassed ? 3 : 2;
+  const levels = Object.fromEntries(PATTERNS.map((p) => [p, Math.min(base, cap)]));
+  for (const [test, pats] of Object.entries(CHECK_PATTERNS)) {
+    if (check[test]) for (const p of pats) levels[p] = Math.min(cap, levels[p] + 1);
+  }
+  return levels;
+}
+
+/** Starting cycle (§11.1): C2 only for regular trainers who passed all three checks. */
+function startingCycle({ experience, check = {} } = {}) {
+  return experience === 'regular' && check.sitToStand && check.inclinePushup && check.hinge ? 'C2' : 'C1';
+}
+
+/**
+ * Offer the next level for a pattern (§5.3)? recent: last sessions on that pattern's exercise, newest last,
+ * each { allTop: boolean, rating }. Offer when 2 of the last 3 hit the top of the range rated good/easy at the
+ * heaviest load she has (atCeiling), or when she finished a cycle at this level progressing with no flags.
+ */
+function shouldOfferLevelUp({ level, recent = [], atCeiling = false, cleanCycleAtLevel = false, maxLevel = 4,
+  cycleType = null, week = null }) {
+  if (level >= maxLevel) return false;
+  if (cycleType === 'C1' && week != null && week < 3) return false;   // Foundations weeks 1–2 are technique weeks
+  const last3 = recent.slice(-3);
+  const good = last3.filter((r) => r.allTop && (r.rating === 'good' || r.rating === 'easy')).length;
+  return (atCeiling && good >= 2) || cleanCycleAtLevel;
+}
+
+/**
+ * Drop a level for a pattern (§5.3, automatic and reversible): "too hard" with missed reps at the lowest load for
+ * 2 sessions, or 2+ work-around/pain flags on the pattern within 14 days.
+ */
+function shouldDropLevel({ level, hardMissesAtLowest = 0, flags14d = 0 }) {
+  if (level <= 1) return false;
+  return hardMissesAtLowest >= 2 || flags14d >= 2;
+}
+
+const LEVELUP_DEFAULTS = {
+  'levelup.min_adherence_pct': 75,   // cycle adherence at least this
+  'levelup.min_sessions': 6,         // sessions logged on the pattern in the cycle
+  'levelup.too_hard_hold_pct': 40,   // "too hard" in at least this share of check-ins holds every level-up
+  'levelup.max_area_reports': 2,     // work-around + "sore a lot" reports on the areas the pattern loads must be fewer than this
+  'levelup.cap_70_plus': 2,          // highest level for 70+
+};
+const lcfg = (s, k) => (s && s[k] != null ? Number(s[k]) : LEVELUP_DEFAULTS[k]);
+
+/**
+ * Automatic level-ups at the cycle review (backlog B1, Amanda packet Q4). A pattern moves up one level when all hold:
+ * adherence ≥ 75%; the pattern trained ≥ 6 times; most of its ratings Good or Easy; no pain report and fewer than 2
+ * work-around or "sore a lot" reports on the areas it loads; below its ceiling (setup and library) and the 70+ cap.
+ * No level-ups at all when ≥ 40% of check-ins were "too hard". At most +1 per pattern.
+ * summary: cycleSummary(); ceilings: { pattern: highest level she can reach } (levelCeilings()).
+ * @returns {{ changes: Array<{pattern, change: 1, evidence}>, held: Array<{pattern, reason}> }}
+ */
+function reviewLevelUps(summary, { settings, ceilings = {} } = {}) {
+  const changes = []; const held = [];
+  const ck = summary.checkins || {};
+  const tooHard = ck.count ? ((ck.feel?.too_hard ?? 0) / ck.count) * 100 : 0;
+  if (tooHard >= lcfg(settings, 'levelup.too_hard_hold_pct')) {
+    return { changes, held: Object.keys(summary.patterns || {}).map((pattern) => ({ pattern, reason: 'too_hard_cycle' })) };
+  }
+  const adherenceOk = (summary.adherence?.pct ?? 0) >= lcfg(settings, 'levelup.min_adherence_pct');
+  const cap70 = summary.patient?.age_band === '70+' ? lcfg(settings, 'levelup.cap_70_plus') : 4;
+  for (const [pattern, pat] of Object.entries(summary.patterns || {})) {
+    const hold = (reason) => held.push({ pattern, reason });
+    const level = pat.level ?? 1;
+    const r = pat.ratings || {};
+    const rated = (r.easy ?? 0) + (r.good ?? 0) + (r.hard ?? 0);
+    const areas = pat.areas || [];
+    const reports = areas.reduce((n, a) => n + (ck.workarounds?.[a] ?? 0) + (ck.sore_a_lot?.[a] ?? 0), 0);
+    if (!adherenceOk) hold('adherence');
+    else if ((pat.sessions ?? 0) < lcfg(settings, 'levelup.min_sessions')) hold('sessions');
+    else if (!rated || (r.easy ?? 0) + (r.good ?? 0) <= rated / 2) hold('ratings');
+    else if (areas.some((a) => (ck.pain_areas?.[a] ?? 0) > 0)) hold('pain');
+    else if (reports >= lcfg(settings, 'levelup.max_area_reports')) hold('area_reports');
+    else if (level >= Math.min(ceilings[pattern] ?? 4, cap70, 4)) hold('ceiling');
+    else {
+      const good = (r.easy ?? 0) + (r.good ?? 0);
+      changes.push({ pattern, change: 1,
+        evidence: `You trained it ${pat.sessions} times, rated it Good or Easy ${good} of ${rated} times, and did ${summary.adherence.pct}% of your workouts.` });
+    }
+  }
+  return { changes, held };
+}
+return { startingLevels, startingCycle, shouldOfferLevelUp, shouldDropLevel, LEVELUP_DEFAULTS, reviewLevelUps };
+})();
+
 // ── web/engine/resolve.js ──
 const __resolve = (() => {
 // Slot → exercise resolution (Framework §5.2, §9, §11, §16).
@@ -763,7 +865,8 @@ const __review = (() => {
 // from, the deterministic default proposal (used when the AI is off, fails, or is waiting for review), the default
 // recap, and applying a proposal to her levels. Validation lives in review_validate.js.
 
-const { PATTERNS, clamp } = __util;
+const { PATTERNS, AREAS, clamp } = __util;
+const { reviewLevelUps } = __levels;
 const { contextFor, eligible } = __resolve;
 const { weeklyCounts, streaks, strengthWins } = __progress;
 const { workingSets } = __session;
@@ -812,6 +915,7 @@ function cycleSummary({ patient, cycle, template, logs, exerciseLogs = [], flags
       first: first ? { weight: first.weight, best: top(first) } : null,
       last: last ? { weight: last.weight, best: top(last) } : null,
       load_type: ex?.load_type ?? null,
+      areas: AREAS.filter((a) => [...new Set(mine.map((l) => l.exercise_id))].some((id) => (lib[id]?.area_load?.[a] ?? 0) >= 1)),
     };
   }
   const checked = done.filter((l) => l.feel);
@@ -831,7 +935,8 @@ function cycleSummary({ patient, cycle, template, logs, exerciseLogs = [], flags
     checkins: { count: checked.length, feel: count(checked.map((l) => l.feel)),
       low_energy: logs.filter((l) => l.energy === 'low').length,
       sore_a_lot: count(done.filter((l) => l.soreness === 'a_lot').flatMap((l) => l.sore_areas || [])),
-      sore_any: area('sore_areas'), workarounds: area('workaround_areas') },
+      sore_any: area('sore_areas'), workarounds: area('workaround_areas'),
+      pain_areas: count(flags.filter((f) => f.type === 'pain' && f.detail?.area).map((f) => f.detail.area)) },
     flags: count(flags.map((f) => f.type)),
     adjustments: count(adjustments.map((a) => a.type)),
     patterns,
@@ -871,16 +976,33 @@ function defaultRecap(summary, nextType, days) {
 }
 
 /**
- * The deterministic default (Framework §14): next cycle type in sequence, levels unchanged, the template's default
- * exercises, her own days per week, her chosen focus.
+ * The deterministic default (Framework §14): next cycle type in sequence, earned level-ups applied (B1, levels.js
+ * reviewLevelUps), the template's default exercises, her own days per week, her chosen focus.
+ * opts: { settings, ceilings } (ceilings from levelCeilings(); without them only the 70+ cap and level 4 limit).
  */
-function defaultProposal(summary) {
+function defaultProposal(summary, { settings, ceilings } = {}) {
   const nextType = NEXT_CYCLE[summary.cycle.type] ?? summary.cycle.type;
   const days = summary.reflection.days ?? summary.cycle.days_per_week;
+  const { changes } = reviewLevelUps(summary, { settings, ceilings });
   return {
-    cycle_type: nextType, days_per_week: days, level_changes: [], swaps: [],
+    cycle_type: nextType, days_per_week: days, level_changes: changes, swaps: [],
     recap: defaultRecap(summary, nextType, days), focus: summary.reflection.focus ?? 'Keep building the habit', flags: [],
   };
+}
+
+/**
+ * The highest level she can reach per pattern: the setup's ceiling (and its pattern exceptions), and no higher than
+ * the top level of an active library exercise that fits her equipment, restrictions and standing work-arounds.
+ * setup: a content_setups row ({ level_ceiling, pattern_ceilings }) or null.
+ */
+function levelCeilings(profile, setup, library) {
+  const out = {};
+  for (const p of PATTERNS) {
+    const ctx = contextFor({ pattern: p }, { ...profile, patternLevels: { ...profile.patternLevels, [p]: 4 } });
+    const top = Math.max(0, ...library.filter((e) => e.pattern === p && eligible(e, ctx)).map((e) => e.level));
+    out[p] = Math.min(Number(setup?.level_ceiling ?? 4), Number(setup?.pattern_ceilings?.[p] ?? 4), top);
+  }
+  return out;
 }
 
 /** Her levels after a proposal's level changes (each ±1, clamped 1–4). */
@@ -904,6 +1026,28 @@ function slotsWithSwaps(slots, swaps = []) {
   });
 }
 
+/**
+ * Her choice on each level-up ("Keep it where it was", B1): the plan without the ones she kept, and the adjustment
+ * rows that record what moved and what she kept, with the evidence. levels: her levels before the review.
+ * @returns {{ plan, log: Array<{type, reason, detail}> }}
+ */
+function applyLevelChoices(plan, kept = [], levels = {}, source = 'default') {
+  const keep = new Set(kept);
+  const level_changes = (plan.level_changes || []).filter((c) => !(c.change > 0 && keep.has(c.pattern)));
+  const log = (plan.level_changes || []).map((c) => {
+    const from = levels[c.pattern] ?? 1;
+    if (c.change > 0 && keep.has(c.pattern)) {
+      return { type: 'level_kept', reason: 'patient_kept_level', detail: { pattern: c.pattern, level: from, evidence: c.evidence ?? null, source } };
+    }
+    return { type: 'level_change', reason: c.change > 0 ? 'cycle_review_up' : 'cycle_review_down',
+      detail: { pattern: c.pattern, from, to: clamp(from + Math.sign(c.change), 1, 4), evidence: c.evidence ?? null, source } };
+  });
+  return { plan: { ...plan, level_changes }, log };
+}
+
+/** "Squat" from "SQ". */
+const patternName = (p) => { const n = PATTERN_NAMES[p] ?? p; return n.charAt(0).toUpperCase() + n.slice(1); };
+
 /** Plain-language lines for the patient: what changes next cycle. */
 function proposalLines(p, library) {
   const lib = Object.fromEntries(library.map((e) => [e.id, e]));
@@ -914,7 +1058,7 @@ function proposalLines(p, library) {
   for (const s of p.swaps || []) lines.push(`New exercise for ${PATTERN_NAMES[s.pattern] ?? s.pattern}: ${lib[s.exercise_id]?.name ?? s.exercise_id}`);
   return lines;
 }
-return { NEXT_CYCLE, CYCLE_NAMES, PATTERN_NAMES, reviewProfile, cycleSummary, libraryOptions, defaultRecap, defaultProposal, applyLevelChanges, slotsWithSwaps, proposalLines };
+return { NEXT_CYCLE, CYCLE_NAMES, PATTERN_NAMES, reviewProfile, cycleSummary, libraryOptions, defaultRecap, defaultProposal, levelCeilings, applyLevelChanges, slotsWithSwaps, applyLevelChoices, patternName, proposalLines };
 })();
 
 // ── web/engine/review_validate.js ──
@@ -1072,7 +1216,7 @@ const __handler = (() => {
 // deps: { db (service-role supabase client), getUser(token) → {id}|null, callModel({system, user}, tool) → tool input
 //         (null when no API key; throws on failure), today: ISO date, model: string }
 
-const { cycleSummary, libraryOptions, defaultProposal, reviewProfile } = __review;
+const { cycleSummary, libraryOptions, defaultProposal, reviewProfile, levelCeilings } = __review;
 const { normalizeProposal, validateProposal, PROPOSAL_TOOL, buildPrompt } = __review_validate;
 const { weekOfCycle } = __cycle;
 const { addDays } = __util;
@@ -1109,7 +1253,7 @@ async function reviewCycle({ token, body = {} }, deps) {
   // Week 9 is the transition week; allow a day of slack for her time zone.
   if (!isAdmin && weekOfCycle(cycle.start_date, addDays(deps.today, 1)) < 9) return { status: 400, body: { error: 'too_early' } };
 
-  const [patient, library, templates, logs, exerciseLogs, flags, adjustments, settingRows] = await Promise.all([
+  const [patient, library, templates, logs, exerciseLogs, flags, adjustments, settingRows, setups] = await Promise.all([
     db.from('patients').select('*').eq('id', patientId).single().then(must),
     db.from('content_exercises').select('*').eq('version', cycle.content_version).then(must),
     db.from('content_templates').select('*').eq('version', cycle.content_version).then(must),
@@ -1118,6 +1262,7 @@ async function reviewCycle({ token, body = {} }, deps) {
     db.from('flags').select('type, detail, created_at').eq('patient_id', patientId).gte('created_at', cycle.start_date).then(must),
     db.from('adjustments').select('type, reason').eq('cycle_id', cycle.id).then(must),
     db.from('app_settings').select('key, value').then(must),
+    db.from('content_setups').select('setup, level_ceiling, pattern_ceilings').eq('version', cycle.content_version).then(must),
   ]);
   const settings = Object.fromEntries(settingRows.map((r) => [r.key, r.value]));
   const reflection = cleanReflection(body.reflection);
@@ -1125,7 +1270,9 @@ async function reviewCycle({ token, body = {} }, deps) {
   const summary = cycleSummary({ patient, cycle, template, logs, exerciseLogs, flags, adjustments, library, reflection });
   const profile = reviewProfile(patient);
   const options = libraryOptions(profile, library.filter((e) => e.active));
-  const fallback = defaultProposal(summary);
+  const active = library.filter((e) => e.active);
+  const ceilings = levelCeilings(profile, setups.find((s) => s.setup === patient.setup) ?? null, active);
+  const fallback = defaultProposal(summary, { settings, ceilings });
 
   let source = 'default'; let output = fallback; let aiError = null; let validation = { errors: [], review: [] };
   try {

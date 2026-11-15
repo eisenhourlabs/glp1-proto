@@ -13,7 +13,7 @@ import { comebackFrom } from '../../web/engine/home_state.js';
 import { planSession, applyHold, weekModeFor, weekWindow } from '../../web/engine/session.js';
 import { applyWorkarounds, applySoreness, scaleToday } from '../../web/engine/readiness.js';
 import { checkinActions, activeAdjustments, applyHoldAndTrim } from '../../web/engine/checkin.js';
-import { cycleSummary, defaultProposal, applyLevelChanges, slotsWithSwaps } from '../../web/engine/review.js';
+import { cycleSummary, defaultProposal, applyLevelChanges, slotsWithSwaps, levelCeilings } from '../../web/engine/review.js';
 import { validateProposal } from '../../web/engine/review_validate.js';
 import { addDays, daysBetween, LOWER_PATTERNS, isSixtyPlus } from '../../web/engine/util.js';
 import { lineChecks, sessionChecks, weekChecks, seriesChecks, reviewChecks, reviewWatch } from './checks.mjs';
@@ -77,12 +77,13 @@ export function runPersona(p, content, { weeks = 30 } = {}) {
   const review = (date) => {
     const summary = cycleSummary({ patient, cycle: { ...cycle, template_id: cycle.template_id }, template: cycle.template,
       logs: cycleLogs, exerciseLogs: cycleExLogs, flags: flags.filter((f) => f.cycle_no === cycle.cycle_no), adjustments, library, reflection: { days: p.review?.days, focus: p.review?.focus } });
-    const proposal = defaultProposal(summary);
+    const ceilings = levelCeilings(profileOf(), setups.find((x) => x.setup === patient.setup) ?? null, library.filter((e) => e.active));
+    const proposal = defaultProposal(summary, { settings, ceilings });
     const validation = validateProposal(proposal, { summary, library, profile: profileOf(), settings });
     const rec = out.cycles[out.cycles.length - 1];
     rec.review = { date, adherence: summary.adherence.pct, completed: summary.adherence.completed, next: proposal.cycle_type,
-      level_changes: proposal.level_changes, swaps: proposal.swaps, recap: proposal.recap, validation };
-    out.violations.push(...reviewChecks(validation, { cycle: cycle.cycle_no, date }));
+      level_changes: proposal.level_changes, ceilings, swaps: proposal.swaps, recap: proposal.recap, validation };
+    out.violations.push(...reviewChecks(validation, { cycle: cycle.cycle_no, date }, { proposal, levels: patient.pattern_levels, ceilings }));
     out.watch.push(...reviewWatch(validation, { cycle: cycle.cycle_no, date }));
     const earned = out.levelUps.filter((l) => l.cycle === cycle.cycle_no);
     const applied = new Set(proposal.level_changes.filter((c) => c.change > 0).map((c) => c.pattern));

@@ -2,7 +2,8 @@
 // from, the deterministic default proposal (used when the AI is off, fails, or is waiting for review), the default
 // recap, and applying a proposal to her levels. Validation lives in review_validate.js.
 
-import { PATTERNS, clamp } from './util.js';
+import { PATTERNS, AREAS, clamp } from './util.js';
+import { reviewLevelUps } from './levels.js';
 import { contextFor, eligible } from './resolve.js';
 import { weeklyCounts, streaks, strengthWins } from './progress.js';
 import { workingSets } from './session.js';
@@ -52,6 +53,7 @@ export function cycleSummary({ patient, cycle, template, logs, exerciseLogs = []
       first: first ? { weight: first.weight, best: top(first) } : null,
       last: last ? { weight: last.weight, best: top(last) } : null,
       load_type: ex?.load_type ?? null,
+      areas: AREAS.filter((a) => [...new Set(mine.map((l) => l.exercise_id))].some((id) => (lib[id]?.area_load?.[a] ?? 0) >= 1)),
     };
   }
   const checked = done.filter((l) => l.feel);
@@ -71,7 +73,8 @@ export function cycleSummary({ patient, cycle, template, logs, exerciseLogs = []
     checkins: { count: checked.length, feel: count(checked.map((l) => l.feel)),
       low_energy: logs.filter((l) => l.energy === 'low').length,
       sore_a_lot: count(done.filter((l) => l.soreness === 'a_lot').flatMap((l) => l.sore_areas || [])),
-      sore_any: area('sore_areas'), workarounds: area('workaround_areas') },
+      sore_any: area('sore_areas'), workarounds: area('workaround_areas'),
+      pain_areas: count(flags.filter((f) => f.type === 'pain' && f.detail?.area).map((f) => f.detail.area)) },
     flags: count(flags.map((f) => f.type)),
     adjustments: count(adjustments.map((a) => a.type)),
     patterns,
@@ -111,16 +114,33 @@ export function defaultRecap(summary, nextType, days) {
 }
 
 /**
- * The deterministic default (Framework §14): next cycle type in sequence, levels unchanged, the template's default
- * exercises, her own days per week, her chosen focus.
+ * The deterministic default (Framework §14): next cycle type in sequence, earned level-ups applied (B1, levels.js
+ * reviewLevelUps), the template's default exercises, her own days per week, her chosen focus.
+ * opts: { settings, ceilings } (ceilings from levelCeilings(); without them only the 70+ cap and level 4 limit).
  */
-export function defaultProposal(summary) {
+export function defaultProposal(summary, { settings, ceilings } = {}) {
   const nextType = NEXT_CYCLE[summary.cycle.type] ?? summary.cycle.type;
   const days = summary.reflection.days ?? summary.cycle.days_per_week;
+  const { changes } = reviewLevelUps(summary, { settings, ceilings });
   return {
-    cycle_type: nextType, days_per_week: days, level_changes: [], swaps: [],
+    cycle_type: nextType, days_per_week: days, level_changes: changes, swaps: [],
     recap: defaultRecap(summary, nextType, days), focus: summary.reflection.focus ?? 'Keep building the habit', flags: [],
   };
+}
+
+/**
+ * The highest level she can reach per pattern: the setup's ceiling (and its pattern exceptions), and no higher than
+ * the top level of an active library exercise that fits her equipment, restrictions and standing work-arounds.
+ * setup: a content_setups row ({ level_ceiling, pattern_ceilings }) or null.
+ */
+export function levelCeilings(profile, setup, library) {
+  const out = {};
+  for (const p of PATTERNS) {
+    const ctx = contextFor({ pattern: p }, { ...profile, patternLevels: { ...profile.patternLevels, [p]: 4 } });
+    const top = Math.max(0, ...library.filter((e) => e.pattern === p && eligible(e, ctx)).map((e) => e.level));
+    out[p] = Math.min(Number(setup?.level_ceiling ?? 4), Number(setup?.pattern_ceilings?.[p] ?? 4), top);
+  }
+  return out;
 }
 
 /** Her levels after a proposal's level changes (each ±1, clamped 1–4). */
@@ -143,6 +163,28 @@ export function slotsWithSwaps(slots, swaps = []) {
     return { ...s, prefer_ids: [sw.exercise_id, ...(s.prefer_ids || [])] };
   });
 }
+
+/**
+ * Her choice on each level-up ("Keep it where it was", B1): the plan without the ones she kept, and the adjustment
+ * rows that record what moved and what she kept, with the evidence. levels: her levels before the review.
+ * @returns {{ plan, log: Array<{type, reason, detail}> }}
+ */
+export function applyLevelChoices(plan, kept = [], levels = {}, source = 'default') {
+  const keep = new Set(kept);
+  const level_changes = (plan.level_changes || []).filter((c) => !(c.change > 0 && keep.has(c.pattern)));
+  const log = (plan.level_changes || []).map((c) => {
+    const from = levels[c.pattern] ?? 1;
+    if (c.change > 0 && keep.has(c.pattern)) {
+      return { type: 'level_kept', reason: 'patient_kept_level', detail: { pattern: c.pattern, level: from, evidence: c.evidence ?? null, source } };
+    }
+    return { type: 'level_change', reason: c.change > 0 ? 'cycle_review_up' : 'cycle_review_down',
+      detail: { pattern: c.pattern, from, to: clamp(from + Math.sign(c.change), 1, 4), evidence: c.evidence ?? null, source } };
+  });
+  return { plan: { ...plan, level_changes }, log };
+}
+
+/** "Squat" from "SQ". */
+export const patternName = (p) => { const n = PATTERN_NAMES[p] ?? p; return n.charAt(0).toUpperCase() + n.slice(1); };
 
 /** Plain-language lines for the patient: what changes next cycle. */
 export function proposalLines(p, library) {
