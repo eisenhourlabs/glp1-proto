@@ -20,4 +20,4 @@ Modules:
 
 Planned: `validate.js` (checks AI cycle proposals against the Framework, Phase 5), `badges.js` (Phase 3).
 
-Tests live in `tests/engine/` (synthetic fixture library). `scripts/simulate.mjs` runs 9-week persona simulations against the real (private) content exported by `scripts/export_content_json.py`.
+Tests live in `tests/engine/` (synthetic fixture library). `scripts/speedrun.mjs` runs persona simulations over many cycles against the real (private) content exported by `scripts/export_content_json.py` and checks the Framework rules; see `docs/speedrun.md`.
