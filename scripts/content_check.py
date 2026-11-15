@@ -186,6 +186,19 @@ def _check_resolvability(c, err, warn, summary):
         warn.append(f"{p} with '{need}': no option in {n} setup/level combination(s); the engine skips or swaps that slot")
 
 
+# Automatic level-up at the cycle review (Framework §5.3, Amanda packet Q4): allowed ranges for the tunable values.
+SETTING_RANGES = {
+    "levelup.min_adherence_pct": (50, 100), "levelup.min_sessions": (1, 30), "levelup.too_hard_hold_pct": (10, 100),
+    "levelup.max_area_reports": (1, 10), "levelup.cap_70_plus": (1, 4),
+}
+
+
+def _check_settings(settings: dict, err: list[str]) -> None:
+    for key, (lo, hi) in SETTING_RANGES.items():
+        if key in settings and not lo <= settings[key] <= hi:
+            err.append(f"settings {key}: {settings[key]} is outside {lo}–{hi}")
+
+
 def validate(c: dict) -> tuple[list[str], list[str], dict]:
     err: list[str] = []
     warn: list[str] = []
@@ -195,6 +208,7 @@ def validate(c: dict) -> tuple[list[str], list[str], dict]:
         elif s["key"] in settings: err.append(f"settings key {s['key']} appears twice")
         elif not isinstance(s["value"], (int, float)): err.append(f"settings {s['key']}: value must be a number")
         else: settings[s["key"]] = s["value"]
+    _check_settings(settings, err)
     codes = [e["code"] for e in c["equipment"]]
     if len(codes) != len(set(codes)): err.append("equipment: duplicate codes")
     for s in c["setups"]:

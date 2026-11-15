@@ -107,3 +107,15 @@ test('cleanReflection keeps only known shapes', () => {
   assert.equal(r.focus.length, 80);
   assert.equal(r.note.length, 500);
 });
+
+test('B1: the standard plan applies earned level-ups within her setup ceiling', async () => {
+  const t = seed();
+  t.exercise_logs = Array.from({ length: 8 }, (_, i) => [
+    { patient_id: 'p1', exercise_id: 'SQ06', sets: [{ weight: 50 + 5 * i, reps: 12 }], rating: 'good', created_at: `2026-09-${String(8 + i).padStart(2, '0')}T10:00:00Z` },
+    { patient_id: 'p1', exercise_id: 'HP04', sets: [{ weight: 30 + 5 * i, reps: 12 }], rating: 'good', created_at: `2026-09-${String(8 + i).padStart(2, '0')}T10:00:00Z` },
+  ]).flat();
+  t.content_setups = [{ version: 1, setup: 'commercial_gym', level_ceiling: 4, pattern_ceilings: { HP: 2 } }];
+  const p = (await reviewCycle({ token: 'ok', body: { reflection } }, deps(t, async () => null))).body.proposal;
+  assert.deepEqual(p.final.level_changes.map((c) => c.pattern), ['SQ'], 'HP is at its setup ceiling');
+  assert.match(p.final.level_changes[0].evidence, /trained it 8 times/);
+});

@@ -23,6 +23,8 @@ export const RULES = {
   increments: 'More load increases in a week than allowed (§8.3)',
   comeback_missed: 'A gap that should start a comeback did not (§13)',
   review_invalid: 'Cycle review plan fails the validator (§14)',
+  level_step: 'A level change of more than one step at a review (§5.3)',
+  level_ceiling: 'A level-up above her setup or library ceiling (§5.3, B1)',
 };
 export const WATCH = {
   levelup_not_applied: 'Level-up earned but never applied (B1, B6)',
@@ -104,10 +106,14 @@ export function seriesChecks(weeks) {
   return watch;
 }
 
-/** The review plan through the same validator the server uses. */
-export function reviewChecks(validation, at) {
-  return [
-    ...validation.errors.map((e) => ({ ...at, rule: 'review_invalid', detail: e })),
-  ];
+/** The review plan through the same validator the server uses, plus the level-up limits (§5.3, B1). */
+export function reviewChecks(validation, at, { proposal, levels = {}, ceilings = {} } = {}) {
+  const out = validation.errors.map((e) => ({ ...at, rule: 'review_invalid', detail: e }));
+  for (const c of proposal?.level_changes ?? []) {
+    const from = levels[c.pattern] ?? 1;
+    if (Math.abs(c.change) !== 1) out.push({ ...at, rule: 'level_step', detail: `${c.pattern} ${c.change}` });
+    if (c.change > 0 && from + 1 > (ceilings[c.pattern] ?? 4)) out.push({ ...at, rule: 'level_ceiling', detail: `${c.pattern} ${from} → ${from + 1} (ceiling ${ceilings[c.pattern]})` });
+  }
+  return out;
 }
 export const reviewWatch = (validation, at) => validation.review.map((r) => ({ ...at, rule: 'review_flag', detail: r }));

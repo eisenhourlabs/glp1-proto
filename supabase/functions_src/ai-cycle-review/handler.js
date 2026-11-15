@@ -4,7 +4,7 @@
 // deps: { db (service-role supabase client), getUser(token) → {id}|null, callModel({system, user}, tool) → tool input
 //         (null when no API key; throws on failure), today: ISO date, model: string }
 
-import { cycleSummary, libraryOptions, defaultProposal, reviewProfile } from '../../../web/engine/review.js';
+import { cycleSummary, libraryOptions, defaultProposal, reviewProfile, levelCeilings } from '../../../web/engine/review.js';
 import { normalizeProposal, validateProposal, PROPOSAL_TOOL, buildPrompt } from '../../../web/engine/review_validate.js';
 import { weekOfCycle } from '../../../web/engine/cycle.js';
 import { addDays } from '../../../web/engine/util.js';
@@ -42,7 +42,7 @@ export async function reviewCycle({ token, body = {} }, deps) {
   // Week 9 is the transition week; allow a day of slack for her time zone.
   if (!isAdmin && weekOfCycle(cycle.start_date, addDays(deps.today, 1)) < 9) return { status: 400, body: { error: 'too_early' } };
 
-  const [patient, library, templates, logs, exerciseLogs, flags, adjustments, settingRows] = await Promise.all([
+  const [patient, library, templates, logs, exerciseLogs, flags, adjustments, settingRows, setups] = await Promise.all([
     db.from('patients').select('*').eq('id', patientId).single().then(must),
     db.from('content_exercises').select('*').eq('version', cycle.content_version).then(must),
     db.from('content_templates').select('*').eq('version', cycle.content_version).then(must),
@@ -51,6 +51,7 @@ export async function reviewCycle({ token, body = {} }, deps) {
     db.from('flags').select('type, detail, created_at').eq('patient_id', patientId).gte('created_at', cycle.start_date).then(must),
     db.from('adjustments').select('type, reason').eq('cycle_id', cycle.id).then(must),
     db.from('app_settings').select('key, value').then(must),
+    db.from('content_setups').select('setup, level_ceiling, pattern_ceilings').eq('version', cycle.content_version).then(must),
   ]);
   const settings = Object.fromEntries(settingRows.map((r) => [r.key, r.value]));
   const reflection = cleanReflection(body.reflection);
@@ -58,7 +59,9 @@ export async function reviewCycle({ token, body = {} }, deps) {
   const summary = cycleSummary({ patient, cycle, template, logs, exerciseLogs, flags, adjustments, library, reflection });
   const profile = reviewProfile(patient);
   const options = libraryOptions(profile, library.filter((e) => e.active));
-  const fallback = defaultProposal(summary);
+  const active = library.filter((e) => e.active);
+  const ceilings = levelCeilings(profile, setups.find((s) => s.setup === patient.setup) ?? null, active);
+  const fallback = defaultProposal(summary, { settings, ceilings });
 
   let source = 'default'; let output = fallback; let aiError = null; let validation = { errors: [], review: [] };
   try {

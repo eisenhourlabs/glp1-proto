@@ -92,6 +92,15 @@ class RuleTests(unittest.TestCase):
         self.assertIn("pattern HI has no exercise", text)
 
 
+class SettingsTests(unittest.TestCase):
+    def test_levelup_ranges(self):
+        from content_check import _check_settings
+        err = []
+        _check_settings({"levelup.min_adherence_pct": 75, "levelup.min_sessions": 0, "levelup.cap_70_plus": 5}, err)
+        self.assertEqual(len(err), 2)
+        self.assertIn("levelup.min_sessions: 0 is outside 1–30", err[0])
+
+
 class EligibilityTests(unittest.TestCase):
     def ex(self, **kw):
         base = {"active": "Y", "level": 2, "equipment": "db|kb;bench", "restrictions": [], "floor": "N",

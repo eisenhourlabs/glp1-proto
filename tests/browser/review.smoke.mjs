@@ -55,7 +55,8 @@ async function run(name, { ai }) {
   await btn('Plan my next cycle').click();
   await page.getByText('Cycle 2: Building').waitFor(); await snap('04-plan-week9');
   const txt = await page.locator('.step').textContent();
-  if (ai && !/squat: one level up/.test(txt)) fail(`${name}: level change not shown`);
+  if (!/Squat: next level/.test(txt)) fail(`${name}: level-up not shown`);   // B1: the standard plan earns it too (8 Good squat sessions)
+  if (!/Keep it where it was/.test(txt)) fail(`${name}: no "Keep it where it was" choice`);
   if (ai && swap && !txt.includes(swap.name)) fail(`${name}: swap not shown`);
   if (!ai && !/24 workouts in Cycle 1/.test(txt)) fail(`${name}: standard recap missing`);
   if (await btn('Start Cycle 2').count()) fail(`${name}: start offered before week 9 is done`);
@@ -72,7 +73,9 @@ async function run(name, { ai }) {
     await choice('Showing up every week').click(); await btn('Plan my next cycle').click();
   }
   await page.getByText('Cycle 2: Building').waitFor();
-  await choice('4').click(); await snap('05-plan-week10');
+  await choice('4').click();
+  if (!ai) await page.locator('[data-levelup="SQ"] .choice', { hasText: 'Keep it where it was' }).click();   // she keeps squats where they were
+  await snap('05-plan-week10');
   await btn('Start Cycle 2').click();
   await page.getByText('This week’s workouts').waitFor(); await snap('06-cycle2-home');
   const eyebrow = await page.locator('.hero .eyebrow').textContent();
@@ -83,7 +86,10 @@ async function run(name, { ai }) {
   if (!/Building · 4 days · Week 1 of 9/.test(eyebrow)) fail(`${name}: should be on C2, 4 days, week 1`);
   if (db.tables.cycles.find((c) => c.cycle_no === 1).status !== 'done' || c2?.status !== 'active') fail(`${name}: cycle statuses`);
   if (ai && p.pattern_levels.SQ !== 3) fail(`${name}: SQ level should go 2 → 3`);
-  if (!ai && p.pattern_levels.SQ !== 2) fail(`${name}: standard plan keeps levels`);
+  if (!ai && p.pattern_levels.SQ !== 2) fail(`${name}: she chose to keep squats where they were`);
+  const adj = db.tables.adjustments.filter((a) => a.cycle_id === c2.id).map((a) => `${a.type}:${a.detail.pattern}`);
+  console.log(`${name}: adjustments ${adj.join(', ')}`);
+  if (!adj.includes(ai ? 'level_change:SQ' : 'level_kept:SQ')) fail(`${name}: level outcome not logged`);
   if (ai && db.tables.ai_proposals[0].applied_cycle_id !== c2.id) fail(`${name}: proposal not linked to the new cycle`);
   if (ai && db.tables.ai_proposals[0].reflection.note !== 'Knees felt great by week 6') fail(`${name}: note not sent`);
   if (ai && swap && !db.tables.cycle_items.some((i) => i.cycle_id === c2.id && i.exercise_id === swap.id)) fail(`${name}: swap not applied`);

@@ -13,8 +13,8 @@ import { speedrunContent } from './fixtures/speedrun_content.js';
 const content = speedrunContent();
 const personas = loadPersonas(fileURLToPath(new URL('../scripts/speedrun/personas.example.json', import.meta.url)));
 
-test('example personas: 10 personas × 30 weeks, zero Framework violations, well under a minute', () => {
-  assert.equal(personas.length, 10);
+test('example personas: 11 personas × 30 weeks, zero Framework violations, well under a minute', () => {
+  assert.equal(personas.length, 11);
   const t0 = performance.now();
   const { results } = runAll(personas, content, { weeks: 30 });
   assert.ok(performance.now() - t0 < 60000);
@@ -108,8 +108,24 @@ test('weekChecks and seriesChecks: increments, level-1 repeats, too-easy weeks, 
   assert.equal(seriesChecks([{ g: 1, cycle: 1, sessions: [band(2), band(3), band(2)] }])[0].rule, 'band_flip');
   assert.deepEqual(seriesChecks([{ g: 1, cycle: 1, sessions: [band(2), band(3), band(3)] }]), []);
 });
-test('reviewChecks: validator errors are violations', () => {
+test('reviewChecks: validator errors, level steps and ceilings are violations', () => {
   assert.equal(reviewChecks({ errors: ['bad'], review: [] }, { cycle: 1 })[0].rule, 'review_invalid');
+  const v = (changes, levels, ceilings) => reviewChecks({ errors: [], review: [] }, {}, { proposal: { level_changes: changes }, levels, ceilings }).map((x) => x.rule);
+  assert.deepEqual(v([{ pattern: 'SQ', change: 1 }], { SQ: 2 }, { SQ: 3 }), []);
+  assert.deepEqual(v([{ pattern: 'SQ', change: 1 }], { SQ: 3 }, { SQ: 3 }), ['level_ceiling']);
+  assert.deepEqual(v([{ pattern: 'SQ', change: 2 }], { SQ: 1 }, { SQ: 4 }), ['level_step']);
+});
+
+test('B1 in the speed-run: consistent personas level up at reviews, never past a ceiling', () => {
+  const { results } = runAll(personas, content, { weeks: 30 });
+  const dana = results.find((r) => r.persona.key === 'dana');
+  assert.ok(dana.cycles[0].review.level_changes.length > 0, 'Dana moves up after cycle 1');
+  assert.ok(Object.values(dana.cycles[1].levels).some((l) => l > 1));
+  const nora = results.find((r) => r.persona.key === 'nora');
+  assert.ok(nora.cycles.every((c) => !c.review || c.review.level_changes.length === 0), 'mostly too hard: no level-ups');
+  for (const r of results) for (const c of r.cycles) for (const [p, l] of Object.entries(c.levels)) {
+    if (r.persona.age_band === '70+') assert.ok(l <= 2, `${r.persona.key} ${p} ${l}`);
+  }
 });
 
 test('reports and compare', () => {
