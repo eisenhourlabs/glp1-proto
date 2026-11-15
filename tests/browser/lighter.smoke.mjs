@@ -91,6 +91,7 @@ const choice = (page, text) => page.locator('.choice', { hasText: text }).first(
   if (!db.tables.adjustments.some((a) => a.type === 'short_version' && a.detail.session_log_id === db.tables.session_logs.at(-1).id)) fail('short version not logged');
   await page.reload(); await page.getByText('This week’s workouts').waitFor();
   await page.locator('.home-action .btn-primary').click();   // Continue: still the short version
+  await btn('Warm-up done').click();
   await page.locator('.exercise .eyebrow').waitFor();
   if (!new RegExp(`of ${expect}$`).test((await page.locator('.exercise .eyebrow').textContent()).trim())) fail('resuming keeps the short version');
   if (errors.length) { console.error(errors.join('\n')); process.exitCode = 1; }

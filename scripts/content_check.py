@@ -196,6 +196,8 @@ SETTING_RANGES = {
     # B6 in-cycle level-up offers: first week of a cycle they can appear (Amanda Q5: week 4), days after "Not yet",
     # and sessions in a row at each step of the bodyweight ladder (reps → 3-s lowering → pause).
     "levelup.offer_min_week": (3, 9), "levelup.offer_decline_days": (7, 28), "bodyweight.sessions_per_step": (1, 4),
+    # B9 "Rough week?": lighter weeks she can choose per cycle (Amanda Q6: 2) and how many days each lasts.
+    "lighter.self_max_per_cycle": (1, 4), "lighter.self_days": (5, 10),
 }
 
 
