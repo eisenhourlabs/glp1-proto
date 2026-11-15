@@ -43,13 +43,17 @@ export async function renderClinicReport(root, { clinicId = null, today } = {}) 
     h('section', { class: 'card' },
       h('h2', {}, 'Workouts done vs planned, by week'),
       !weeks.length ? h('p', { class: 'muted' }, small ? `Weekly rates appear once ${r.min_cell} or more patients have enrolled.` : 'No weeks yet.') :
-      h('div', { class: 'bars', role: 'img', 'aria-label': 'Weekly adherence' }, weeks.map((w, i) => {
+      h('div', { class: 'bars', role: 'list', 'aria-label': 'Workouts done vs planned, by week' }, weeks.map((w, i) => {
         const p = pct(w.completed, w.planned);
         const current = i === weeks.length - 1;
-        return h('div', { class: 'bar-col' },
-          h('div', { class: 'bar-track' }, h('div', { class: `bar${current ? ' current' : ''}`, style: `height:${Math.min(100, p ?? 0)}%` })),
-          h('span', { class: 'bar-val' }, p == null ? '—' : `${p}%`),
-          h('span', { class: 'bar-label' }, current ? 'This wk' : day(w.week_start)));
+        const label = current ? 'This week' : `Week of ${day(w.week_start)}`;
+        // The picture is for eyes; the sentence is for screen readers (and survives a printed page too).
+        const spoken = p == null ? `${label}: not shown` : `${label}: ${p}% of planned workouts done`;
+        return h('div', { class: 'bar-col', role: 'listitem' },
+          h('span', { class: 'visually-hidden' }, spoken),
+          h('div', { class: 'bar-track', 'aria-hidden': 'true' }, h('div', { class: `bar${current ? ' current' : ''}`, style: `height:${Math.min(100, p ?? 0)}%` })),
+          h('span', { class: 'bar-val', 'aria-hidden': 'true' }, p == null ? '—' : `${p}%`),
+          h('span', { class: 'bar-label', 'aria-hidden': 'true' }, current ? 'This wk' : day(w.week_start)));
       })),
       weeks.length ? h('p', { class: 'small muted' }, 'Completed ÷ planned workouts for patients who had started by that week. This week is so far.') : null),
 

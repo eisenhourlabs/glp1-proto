@@ -4,6 +4,7 @@ import { h } from '../shared/dom.js';
 import { secondary, statusLine } from '../shared/ui.js';
 import { weekOfCycle } from '../engine/cycle.js';
 import { weeklyCounts, streaks, strengthWins } from '../engine/progress.js';
+import { weekStreaks } from '../engine/week_streak.js';
 import { recentAdherence, SKIP_REASONS } from '../engine/report.js';
 import { patientDetail, loadContent, localToday, resolveFlag, setPatientStatus } from './api.js';
 import { pill } from './patients.js';
@@ -26,6 +27,7 @@ export async function renderPatient(root, { id, admin }) {
   const cycleLogs = cycle ? d.logs.filter((l) => l.cycle_id === cycle.id) : [];
   const weeks = cycle ? weeklyCounts(cycleLogs, Math.max(1, week), perWeek) : [];
   const s = streaks(weeks, Math.max(1, week));
+  const wk = weekStreaks(weeks, Math.max(1, week));
   const recent = recentAdherence(d.logs, perWeek, cycle?.start_date ?? p.start_date, today);
   const wins = strengthWins(d.exLogs, content.library, 10);
 
@@ -49,7 +51,7 @@ export async function renderPatient(root, { id, admin }) {
     cycle ? h('section', { class: 'card' },
       h('h2', {}, `Cycle ${cycle.cycle_no} · ${template?.name ?? cycle.template_id}`),
       h('p', { class: 'muted' }, `Started ${fmt(cycle.start_date)} · week ${Math.min(Math.max(week, 1), 9)} of 9 · `,
-        `14-day adherence ${recent.pct ?? '—'}% · streak ${s.current} (best ${s.best}) · ${s.total} workouts`),
+        `14-day adherence ${recent.pct ?? '—'}% · weekly streak ${wk.current} (best ${wk.best}) · ${s.total} workouts`),
       Object.keys(cycle.week_modes || {}).length
         ? h('p', { class: 'small' }, 'Week decisions: ', Object.entries(cycle.week_modes).map(([w, m]) => `week ${w}: ${m.mode}${m.restReasons?.length ? ` (${m.restReasons.join(', ')})` : ''}`).join(' · '))
         : null,

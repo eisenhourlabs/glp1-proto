@@ -4,6 +4,7 @@ import { stepScreen, choices, primary, secondary, signatureField, statusLine } f
 import { CONSENT, CONSENT_VERSION, WAIVER, WAIVER_VERSION, RED_FLAG_QUESTIONS, RESTRICTION_OPTIONS, SCREENING_VERSION } from './copy.js';
 import { signDocument, setScreening, savePatient, completeOnboarding, loadPatient, loadContent, createFirstCycle, localToday } from './api.js';
 import { PROFILE_STEPS } from './onboarding_profile.js';
+import { screenChange } from '../shared/a11y.js';
 
 const LEGAL_STEPS = [welcome, consent, screening, waiver];
 
@@ -17,8 +18,8 @@ export function runOnboarding(root, ctx) {
   const go = async (delta = 1) => {
     i = Math.max(0, Math.min(steps.length - 1, i + delta));
     clear(root);
-    window.scrollTo?.(0, 0);
     root.append(await steps[i]({ ...ctx, ans, step: i + 1, total: steps.length, next: () => go(1), back: () => go(-1) }));
+    screenChange(root);
   };
   go(0);
 }

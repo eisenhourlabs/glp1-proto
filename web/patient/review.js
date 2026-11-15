@@ -4,6 +4,8 @@
 import { h, clear } from '../shared/dom.js';
 import { stepScreen, choices, primary, secondary, statusLine } from '../shared/ui.js';
 import { weeklyCounts, streaks, strengthWins } from '../engine/progress.js';
+import { weekStreaks } from '../engine/week_streak.js';
+import { screenChange } from '../shared/a11y.js';
 import { cycleSummary, defaultProposal, proposalLines, applyLevelChoices, patternName, levelCeilings, reviewProfile, CYCLE_NAMES } from '../engine/review.js';
 import { WORKED, IN_THE_WAY, ADJUST, FOCUS } from '../engine/reflection.js';
 import { createNextCycle } from './api.js';
@@ -20,7 +22,7 @@ export async function renderReview(root, ctx) {
     minutes: ctx.patient.session_minutes ?? ctx.cycle.session_minutes ?? 45, note: '' };
   const steps = [celebrate, reflect, plan];
   let i = 0;
-  const go = (d = 1) => { i += d; clear(root); window.scrollTo?.(0, 0); root.append(steps[i]()); };
+  const go = (d = 1) => { i += d; clear(root); root.append(steps[i]()); screenChange(root); };
   const total = steps.length;
 
   function celebrate() {
@@ -31,7 +33,7 @@ export async function renderReview(root, ctx) {
       step: 1, total, title: `Your Cycle ${ctx.cycle.cycle_no} review`,
       lead: `Look at what you’ve done in ${CYCLE_NAMES[ctx.cycle.cycle_type]}.`,
       body: [
-        h('div', { class: 'stats' }, stat(s.total, 'workouts'), stat(s.best, 'best streak'), stat(weeks.filter((w) => w.done).length, 'weeks trained')),
+        h('div', { class: 'stats' }, stat(s.total, 'workouts'), stat(weekStreaks(weeks, 10).best, 'best weekly streak'), stat(weeks.filter((w) => w.done).length, 'weeks trained')),
         wins.length ? h('div', { class: 'card' }, h('h2', {}, 'Getting stronger'),
           h('ul', { class: 'wins' }, wins.map((w) => h('li', {}, h('span', {}, w.name), h('span', { class: 'win' }, `${w.from} → ${w.to}`))))) : null,
         h('p', {}, 'Two quick questions, then your coach plans your next cycle.'),
@@ -82,8 +84,9 @@ export async function renderReview(root, ctx) {
           if (err.code === 'too_early') { msg.textContent = 'Your review opens in week 9.'; e.target.disabled = false; return; }
           proposal = await localDefault(ctx, a, logs, exLogs);          // never blocked: the standard plan
         }
-        clear(root); window.scrollTo?.(0, 0);
+        clear(root);
         planScreen(root, ctx, proposal);
+        screenChange(root);
       })],
     });
   }

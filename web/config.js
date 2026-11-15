@@ -16,6 +16,7 @@ export const CONFIG = Object.freeze({
   BRAND_NAME: 'Strength Practice',        // placeholder until the product is named
   STORAGE_PREFIX: 'glp1proto',            // prefixes localStorage keys, IndexedDB and caches
   DEMO_BANNER: true,                      // shows "Prototype — demo data only"
+  ERROR_REPORTING: true,                  // browser errors go to the `client-error` Edge Function (A14); false turns it off
 });
 
 export const isConfigured = () =>

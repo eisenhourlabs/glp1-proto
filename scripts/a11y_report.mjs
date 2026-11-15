@@ -14,6 +14,7 @@ const byRule = new Map();
 for (const s of scans) {
   for (const v of s.violations) {
     const r = byRule.get(v.id) ?? { ...v, screens: new Set(), examples: new Set() };
+    r.detail ||= v.detail;
     r.screens.add(s.label); v.nodes.forEach((n) => r.examples.add(n));
     byRule.set(v.id, r);
   }
@@ -26,6 +27,7 @@ for (const [id, r] of byRule) {
   console.log(`\n${isKnown ? 'KNOWN (C6)' : 'NEW'} · ${r.impact} · ${id}: ${r.help}`);
   console.log(`  screens (${r.screens.size}): ${[...r.screens].slice(0, 8).join(', ')}${r.screens.size > 8 ? ', …' : ''}`);
   console.log(`  e.g. ${[...r.examples].slice(0, 3).join(' | ')}`);
+  if (r.detail) console.log(`  ${r.detail}`);
 }
 const fixed = Object.keys(known).filter((id) => !byRule.has(id));
 if (fixed.length) console.log(`\nNo longer found (remove from a11y_known.json): ${fixed.join(', ')}`);

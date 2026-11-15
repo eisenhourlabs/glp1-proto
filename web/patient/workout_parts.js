@@ -75,7 +75,8 @@ export function holdTimer(onStop) {
 
 /** A bottom sheet over the page. content: nodes. Returns close(). */
 export function openSheet(title, content, { onClose } = {}) {
-  const close = () => { back.remove(); document.removeEventListener('keydown', esc); onClose?.(); };
+  const opener = document.activeElement;
+  const close = () => { back.remove(); document.removeEventListener('keydown', esc); opener?.isConnected && opener.focus?.({ preventScroll: true }); onClose?.(); };
   const esc = (e) => { if (e.key === 'Escape') close(); };
   const sheet = h('div', { class: 'sheet', role: 'dialog', 'aria-modal': 'true', 'aria-label': title },
     h('h2', {}, title), ...content);

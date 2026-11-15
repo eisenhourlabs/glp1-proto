@@ -6,7 +6,8 @@ import { primary, secondary, choices } from '../shared/ui.js';
 import { weekOfCycle, weekModeMessage } from '../engine/cycle.js';
 import { restartDue } from '../engine/adherence.js';
 import { standingAreas } from '../engine/readiness.js';
-import { weeklyCounts, streaks } from '../engine/progress.js';
+import { weeklyCounts } from '../engine/progress.js';
+import { weekStreaks } from '../engine/week_streak.js';
 import { sessionOrder, weekStatus, trainedOn, weekWindow, weekModeFor } from '../engine/session.js';
 import { swapNote } from '../engine/resolve.js';
 import { activeAdjustments, extraSetsAllowed } from '../engine/checkin.js';
@@ -25,6 +26,7 @@ import { renderReview } from './review.js';
 import { addDays } from '../engine/util.js';
 import { homeState, comebackFor, restDaySuggested } from '../engine/home_state.js';
 import { findOffer, offerCard } from './offers_ui.js';
+import { screenChange } from '../shared/a11y.js';
 import { selfLighterState, selfLighterRange } from '../engine/lighter.js';
 
 const GOALS = {
@@ -69,7 +71,7 @@ export async function renderHome(root, { patient, cycle, reload }) {
   const env = { patient, cycle, content, settings, week, weekMode, comeback, standing, capNo: cycle.restart?.cap_no ?? cycle.cycle_no,
     holdAndTrim: active.holdAndTrim,
     extraSets: active.extraSets && !active.holdAndTrim && extraSetsAllowed(weekMode) };
-  const rerender = async () => { clear(root); await renderHome(root, { patient, cycle, reload }); window.scrollTo?.(0, 0); };
+  const rerender = async () => { clear(root); await renderHome(root, { patient, cycle, reload }); screenChange(root); };
 
   // ── Cycle review (week 9 on, Framework §14) ──
   const reviewOpen = rawWeek >= 9;
@@ -78,14 +80,14 @@ export async function renderHome(root, { patient, cycle, reload }) {
   // ── Back after 28+ days inside the cycle (§13, B7): restart this cycle type at week 1 ──
   const doneWeeks = logs.filter((l) => DONE.has(l.status)).map((l) => l.week);
   if (restartDue({ mode: comeback.mode, rawWeek, lastWeekInCycle: doneWeeks.length ? Math.max(...doneWeeks) : null, proposalReady: Boolean(proposal) })) {
-    const best = streaks(weeklyCounts(logs, week, template.days_per_week), week).best;
+    const best = weekStreaks(weeklyCounts(logs, week, template.days_per_week), week).best;
     await restartCycle(patient, cycle, { bestStreak: Math.max(best, cycle.restart?.best_streak ?? 0), fromWeek: week });
     return reload ? reload() : window.location.reload();
   }
   const showReview = () => {
     clear(root);
     renderReview(root, { patient, cycle, template, content, canStart: rawWeek >= 10 || status.complete,
-      startsOn: prettyDate(addDays(cycle.start_date, 63)), onDone: () => (reload ? reload() : rerender()) }).catch(fail);
+      startsOn: prettyDate(addDays(cycle.start_date, 63)), onDone: () => (reload ? reload() : rerender()) }).then(() => screenChange(root)).catch(fail);
     window.scrollTo?.(0, 0);
   };
 
@@ -97,6 +99,7 @@ export async function renderHome(root, { patient, cycle, reload }) {
         await addAdjustment(patient.id, cycle.id, { type: 'workaround_cleared', reason: 'feeling_better', detail: { area } });
         env.standing = env.standing.filter((a) => a !== area);
       } });
+    screenChange(root);
   };
   const start = async (session, answers) => {
     const todayAns = { ...answers, soreAreas: lastDone?.sore_areas || [] };
@@ -119,6 +122,7 @@ export async function renderHome(root, { patient, cycle, reload }) {
     const warmup = warmupFor(await loadWarmups(content.version), patient);
     runWorkout(root, { patient, cycle, sessionLog: log, sessionName: names[session], items, warmup, existing, planner, today: todayAns,
       onFinish: (r) => finishScreen({ ...r, log, slots: planner.cycleSlots }, session) });
+    screenChange(root);
   };
   const finishScreen = (r, session) => {
     clear(root);
@@ -129,10 +133,9 @@ export async function renderHome(root, { patient, cycle, reload }) {
       clear(root);
       renderReward(root, { patient, cycle, week, perWeek: template.days_per_week, status: r.status, messages, onHome: rerender, onProgress: showProgress,
         offerCard: offer ? offerCard(offer, { patient, cycle }) : null, carriedBest: cycle.restart?.best_streak ?? 0 })
-        .catch(fail);
-      window.scrollTo?.(0, 0);
+        .then(() => screenChange(root)).catch(fail);
     } });
-    window.scrollTo?.(0, 0);
+    screenChange(root);
   };
   const skipSheet = () => {
     let reason = null; let close = () => {};
@@ -170,7 +173,7 @@ export async function renderHome(root, { patient, cycle, reload }) {
   };
   const showProgress = () => {
     clear(root);
-    renderProgress(root, { patient, cycle, template, week, library: content.library, carriedBest: cycle.restart?.best_streak ?? 0, onBack: rerender }).catch(fail);
+    renderProgress(root, { patient, cycle, template, week, library: content.library, carriedBest: cycle.restart?.best_streak ?? 0, onBack: rerender }).then(() => screenChange(root)).catch(fail);
     window.scrollTo?.(0, 0);
   };
 
