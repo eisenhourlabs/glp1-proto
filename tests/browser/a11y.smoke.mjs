@@ -3,6 +3,7 @@
 //   - the "I feel dizzy or unwell" control is at least 48 px high
 //   - the progress tiles say what they count (workouts, weekly streak, best weekly streak) and the weekly rows have text
 //   - at 200% text size nothing scrolls sideways and the dizzy control stays on screen
+//   - "Heavier"/"Lighter" say the new weight; after "Done set" and "Ready" focus moves on instead of being lost (C9)
 //   node tests/browser/a11y.smoke.mjs <content.json> [screenshot-dir]
 import { chromium, serve, loadContent, seed, openApp, signIn } from './harness.mjs';
 import { chooseTemplate, materializeCycle } from '../../web/engine/cycle.js';
@@ -94,6 +95,35 @@ if (!sheet || sheet.x < -1 || sheet.x + sheet.width > 391) fail('dizzy sheet is 
 await snap('06-dizzy-200');
 await btn('I feel OK now. Keep going').click();
 f = await focused(); if (f.tag !== 'BUTTON') fail(`closing the sheet should return focus to the dizzy button, got ${JSON.stringify(f)}`);
+
+// ── steppers and "Done set" (C9): the new weight is spoken, and focus moves to what comes next, not to nowhere ──
+const where = () => page.evaluate(() => { const a = document.activeElement;
+  return { tag: a?.tagName, cls: String(a?.className ?? ''), text: a?.textContent?.trim().slice(0, 60) }; });
+const landed = (g) => g.tag === 'H2' || /\b(rest-label|set-n|note-strong)\b/.test(g.cls);
+if (await page.getByRole('button', { name: 'Heavier' }).count()) {
+  await page.getByRole('button', { name: 'Heavier' }).click();
+  const live = page.locator('.stepper [role="status"]');
+  const said = (await live.count()) ? (await live.first().textContent())?.trim() : '(nothing)';
+  const val = await page.locator('.weight-input').first().inputValue();
+  if (said !== `${val} pounds`) fail(`after "Heavier" the weight should be spoken ("${val} pounds"), got "${said}"`);
+}
+await btn('Done set').click();
+await page.waitForTimeout(50);
+f = await where(); if (!landed(f)) fail(`after "Done set" focus should move to the rest timer, next set or question, got ${JSON.stringify(f)}`);
+if (await page.locator('.find-weight').count()) {             // first time on this exercise: "How was that weight?"
+  if (f.text !== 'How was that weight?') fail(`focus should be on "How was that weight?", got ${JSON.stringify(f)}`);
+  await page.locator('.find-weight .choice').first().click();
+  f = await where(); if (!/note-strong/.test(f.cls)) fail(`after choosing, focus should be on the new weight note, got ${JSON.stringify(f)}`);
+}
+let restSeen = false;
+if (await page.locator('.rest').count()) {
+  restSeen = true;
+  if (!/rest-label|note-strong/.test(f.cls)) fail(`with a rest timer showing, focus should be on it (or the note just above it), got ${JSON.stringify(f)}`);
+  await btn('Ready').click();
+  f = await where(); if (!landed(f) || /rest-label/.test(f.cls)) fail(`after "Ready" focus should be on the next set, got ${JSON.stringify(f)}`);
+}
+if (!restSeen) console.log('note: no rest timer on this exercise; the rest-timer focus check did not run');
+await snap('06b-after-set');
 await page.reload();
 await page.addStyleTag({ content: 'html { font-size: 200% !important; } * { font-family: monospace !important; }' });
 await page.getByText('This week’s workouts').waitFor();

@@ -8,7 +8,7 @@ import { swapOptions, weightLabel, lastTimeText } from '../engine/session.js';
 import { formatRange, LOWER_PATTERNS, isSixtyPlus } from '../engine/util.js';
 import { saveExercise, finishSession, discardSession, raiseFlag } from './log_api.js';
 import { stepper, weightControl, restTimer, holdTimer, openSheet, dizzySheet } from './workout_parts.js';
-import { screenChange } from '../shared/a11y.js';
+import { screenChange, focusOn } from '../shared/a11y.js';
 import { WARNING_SIGNS, HURTS, RATING_OPTIONS, EFFORT_CUE, BREATH_CUE, FAST_CUE, AREA_OPTIONS, areaName } from './session_copy.js';
 
 const FIND_OPTIONS = [{ value: 'much', label: 'Way too light' }, ...RATING_OPTIONS];
@@ -128,19 +128,23 @@ export function runWorkout(root, w) {
 
     function askFindYourWeight(wt) {
       setsBox.querySelector('.set.current')?.remove();
-      setsBox.append(h('div', { class: 'card soft' }, h('h2', {}, 'How was that weight?'),
+      setsBox.append(h('div', { class: 'card soft find-weight' }, h('h2', {}, 'How was that weight?'),
         choices({ columns: 2, options: FIND_OPTIONS, value: null, label: 'How was that weight?', onChange: (v) => {
           const r = findYourWeight({ loadType: ex.load_type, weight: wt, rating: v === 'much' ? 'easy' : v, muchEasier: v === 'much',
             lower: LOWER_PATTERNS.has(item.slot.pattern), ageBand: w.patient.age_band, available: dumbbells.length ? dumbbells : undefined });
           weight = r.weight;
           afterSet([h('p', { class: 'note-strong' }, `${r.note} ${weightLabel(ex.load_type, r.weight)}`.trim())]);
         } })));
+      focusOn(setsBox.querySelector('.find-weight h2'));
     }
 
+    // "Done set" leaves the page, so focus moves to what comes next (C9): the rest timer, the next set or the rating.
+    const nextSetLabel = () => setsBox.querySelector('.set.current .set-n') ?? after.querySelector('h2');
     function afterSet(extra = []) {
       const more = st.sets.length < item.dose.sets;
-      const rest = more && item.dose.restSec ? [restTimer(item.dose.restSec, () => {})] : [];
+      const rest = more && item.dose.restSec ? [restTimer(item.dose.restSec, ({ hadFocus }) => { if (hadFocus) focusOn(nextSetLabel()); })] : [];
       paintSets([...extra, ...rest]);
+      focusOn(setsBox.querySelector('.note-strong') ?? setsBox.querySelector('.rest-label') ?? nextSetLabel());
     }
 
     function rateExercise() {
