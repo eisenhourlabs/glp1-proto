@@ -154,7 +154,7 @@ textarea { font: inherit; color: inherit; background: var(--surface); width: 100
 .workout-bar > div { flex: 1; min-width: 0; }
 .workout-bar { flex-wrap: wrap; }
 .workout-bar .progress { margin: 4px 0 0; }
-.btn-warn { background: transparent; color: var(--danger); border-color: var(--danger); font-size: 1rem; padding: 10px 16px; min-height: var(--tap); flex: none; }  /* the safety control is never the smallest button (C6) */
+.btn-warn { background: transparent; color: var(--danger); border-color: var(--danger); font-size: 1rem; padding: 10px 16px; min-height: var(--tap); flex: 0 1 auto; max-width: 100%; }  /* the safety control is never the smallest button (C6) */
 .target { font-size: 1.1rem; font-weight: 600; margin: 4px 0; }
 .tempo { font-weight: 600; color: var(--brand); margin: 0 0 4px; }
 .note-strong { font-weight: 600; color: var(--good); margin: 8px 0; }

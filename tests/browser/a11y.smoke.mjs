@@ -79,8 +79,8 @@ const dizzy = await btn('I feel dizzy or unwell').boundingBox();
 if (!dizzy || dizzy.height < 47.5) fail(`dizzy control is ${dizzy?.height}px high; needs 48`);
 await snap('04-exercise');
 
-// ── 200% text size ──
-await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
+// ── 200% text size (in a wide font, so the result doesn't depend on which fonts the machine has) ──
+await page.addStyleTag({ content: 'html { font-size: 200% !important; } * { font-family: monospace !important; }' });
 await page.waitForTimeout(100);
 await check200('exercise screen');
 const big = await btn('I feel dizzy or unwell').boundingBox();
@@ -95,7 +95,7 @@ await snap('06-dizzy-200');
 await btn('I feel OK now. Keep going').click();
 f = await focused(); if (f.tag !== 'BUTTON') fail(`closing the sheet should return focus to the dizzy button, got ${JSON.stringify(f)}`);
 await page.reload();
-await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
+await page.addStyleTag({ content: 'html { font-size: 200% !important; } * { font-family: monospace !important; }' });
 await page.getByText('This week’s workouts').waitFor();
 await check200('home'); await snap('07-home-200');
 await btn('Your progress').click();
