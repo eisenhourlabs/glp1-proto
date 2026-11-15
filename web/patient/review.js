@@ -5,17 +5,10 @@ import { h, clear } from '../shared/dom.js';
 import { stepScreen, choices, primary, secondary, statusLine } from '../shared/ui.js';
 import { weeklyCounts, streaks, strengthWins } from '../engine/progress.js';
 import { cycleSummary, defaultProposal, proposalLines, applyLevelChoices, patternName, levelCeilings, reviewProfile, CYCLE_NAMES } from '../engine/review.js';
+import { WORKED, IN_THE_WAY, ADJUST, FOCUS } from '../engine/reflection.js';
 import { createNextCycle } from './api.js';
 import { cycleLogs, allExerciseLogs, myFlags, cycleAdjustments, cycleProposal, runReview, loadSettings, addAdjustment } from './log_api.js';
 
-const WORKED = [['short_workouts', 'Short workouts'], ['getting_stronger', 'Feeling stronger'], ['schedule', 'My schedule'],
-  ['energy', 'More energy'], ['checkins', 'The check-ins'], ['guidance', 'Knowing what to do']];
-const IN_THE_WAY = [['busy', 'Busy weeks'], ['low_energy', 'Low energy'], ['soreness', 'Soreness'], ['travel', 'Travel'],
-  ['motivation', 'Motivation'], ['nothing', 'Nothing really']];
-const ADJUST = [['same', 'Keep it the same'], ['more', 'A bit more challenge'], ['easier', 'A bit easier'],
-  ['shorter', 'Shorter workouts'], ['fewer_days', 'Fewer days'], ['more_days', 'More days']];
-const FOCUS = ['Stronger legs for stairs and getting up', 'Upper-body strength for carrying and lifting', 'Steadier balance',
-  'Showing up every week', 'Everyday tasks feel easier'];
 const opts = (list) => list.map(([value, label]) => ({ value, label }));
 
 /** ctx: { patient, cycle, template, content, canStart, startsOn, onDone() } */

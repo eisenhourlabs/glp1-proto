@@ -36,8 +36,10 @@ export function serve(port) {
     if (OVERRIDES.has(p)) { res.writeHead(200, { 'content-type': TYPES[extname(p)] || 'text/plain' }); res.end(OVERRIDES.get(p)); return; }
     // The self-hosted supabase-js is replaced by the fake backend (fake_supabase.js exports the same createClient).
     if (p.endsWith('/vendor/supabase-js.js')) { res.writeHead(200, { 'content-type': 'text/javascript' }); res.end(FAKE); return; }
-    try { res.writeHead(200, { 'content-type': TYPES[extname(p)] || 'text/plain' }); res.end(readFileSync(join(ROOT, p))); }
-    catch { res.writeHead(404); res.end(); }
+    if (p === '/__online') { res.writeHead(204); res.end(); return; }   // the fake backend's "is there a network" check
+    let body;
+    try { body = readFileSync(join(ROOT, p)); } catch { res.writeHead(404); res.end(); return; }
+    res.writeHead(200, { 'content-type': TYPES[extname(p)] || 'text/plain' }); res.end(body);
   }).listen(port);
 }
 

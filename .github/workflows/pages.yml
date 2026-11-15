@@ -79,7 +79,7 @@ jobs:
           mkdir -p /tmp/shots
           node scripts/demo_data.mjs "$F" /tmp/demo.synthetic.json
           fail=0
-          for t in admin join onboarding review workout age60 comeback lighter update; do
+          for t in admin join onboarding review workout age60 comeback lighter update offline; do
             echo "::group::$t"; node "tests/browser/$t.smoke.mjs" "$F" /tmp/shots || fail=1; echo "::endgroup::"
           done
           echo "::group::demo"; node tests/browser/demo.smoke.mjs "$F" /tmp/demo.synthetic.json /tmp/shots || fail=1; echo "::endgroup::"

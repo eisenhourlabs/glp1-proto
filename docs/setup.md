@@ -122,13 +122,22 @@ run them on the synthetic content or on the real export (more realistic):
 npm i -g playwright@1.63.0 axe-core@4.10.3 && npx playwright@1.63.0 install chromium
 F=tests/fixtures/content.synthetic.json                   # or: python scripts/export_content_json.py --out ../content.local.json
 node scripts/demo_data.mjs $F /tmp/demo.json              # or use <content folder>/demo_seed.local.json with the real export
-for t in admin join onboarding review workout age60 comeback lighter update; do node tests/browser/$t.smoke.mjs $F [screenshot-dir]; done
+for t in admin join onboarding review workout age60 comeback lighter update offline; do node tests/browser/$t.smoke.mjs $F [screenshot-dir]; done
 node tests/browser/demo.smoke.mjs $F /tmp/demo.json [screenshot-dir]
 ```
 They run the real pages against an in-memory fake of Supabase (`tests/browser/fake_supabase.js`, served in place of
 `web/vendor/supabase-js.js`). Accessibility: set `A11Y_REPORT=/tmp/a11y.jsonl` while running them (every screenshot
 point is scanned with axe), then `node scripts/a11y_report.mjs /tmp/a11y.jsonl`. Serious or critical issues fail
 unless listed in `tests/browser/a11y_known.json` (the open list for backlog C6).
+
+## Offline workouts (C4)
+- With a signal, the patient app saves copies of what a workout needs (profile, patient, plan, content, warm-ups,
+  logs) in IndexedDB (`glp1proto-offline`). Without one, she can start, log, finish and check in: each write is applied
+  on the phone and queued in localStorage (`glp1proto.outbox.<user>`), then sent in order when the signal is back. The
+  header says "Saved on this phone…" while anything waits. Needs migration 011 (`client_ref`).
+- Not offline: onboarding, the end-of-cycle review, accepting a level-up offer, settings. They show the usual
+  "check your connection" message.
+- Sign-out wipes the saved copies; unsent workouts stay queued for that user's next sign-in on the phone.
 
 ## App versions and updates (C5)
 - `web/version.js` holds the one version constant. **Bump it in every PR that changes anything under `web/`** (CI

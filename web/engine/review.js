@@ -7,6 +7,7 @@ import { reviewLevelUps } from './levels.js';
 import { contextFor, eligible } from './resolve.js';
 import { weeklyCounts, streaks, strengthWins } from './progress.js';
 import { workingSets } from './session.js';
+import { choicesOnly } from './reflection.js';
 
 export const NEXT_CYCLE = { C1: 'C2', C2: 'C3', C3: 'C3' };
 export const CYCLE_NAMES = { C1: 'Foundations', C2: 'Building', C3: 'Strong & Consistent' };
@@ -79,8 +80,8 @@ export function cycleSummary({ patient, cycle, template, logs, exerciseLogs = []
     adjustments: count(adjustments.map((a) => a.type)),
     patterns,
     strength_wins: strengthWins(exerciseLogs, library, 3).map((w) => ({ exercise: w.name, from: w.from, to: w.to })),
-    reflection: { worked: reflection.worked || [], in_the_way: reflection.in_the_way || [], adjust: reflection.adjust || null,
-      focus: reflection.focus || null, days: reflection.days ?? null },
+    // Fixed choices only (E4): no free text and no ids reach the summary the AI sees.
+    reflection: (({ worked, in_the_way, adjust, focus, days }) => ({ worked, in_the_way, adjust, focus, days }))(choicesOnly(reflection)),
   };
 }
 

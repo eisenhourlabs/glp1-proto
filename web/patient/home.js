@@ -12,7 +12,7 @@ import { swapNote } from '../engine/resolve.js';
 import { activeAdjustments, extraSetsAllowed } from '../engine/checkin.js';
 import { loadContent, localToday, restartCycle } from './api.js';
 import { loadSettings, loadWarmups, cycleLogs, recentWorkouts, standingInputs, addAdjustment, flagsSince, startSession, sessionExerciseLogs, finishSession,
-  discardSession, saveWeekMode, updateCycleStart, cycleAdjustments, skipToday, cycleProposal } from './log_api.js';
+  discardSession, saveWeekMode, updateCycleStart, cycleAdjustments, skipToday, cycleProposal, prefetchForOffline } from './log_api.js';
 import { makePlanner, warmupFor, renderReadiness } from './today.js';
 import { runWorkout } from './workout.js';
 import { COMEBACK } from './session_copy.js';
@@ -35,6 +35,7 @@ const DONE = new Set(['done', 'partial']);
 
 export async function renderHome(root, { patient, cycle, reload }) {
   const [content, settings] = await Promise.all([loadContent(), loadSettings()]);
+  prefetchForOffline(patient.id, content.version);
   const today = localToday();
   let logs = await cycleLogs(cycle.id);
   logs = await tidyStale(logs, today);
@@ -50,7 +51,7 @@ export async function renderHome(root, { patient, cycle, reload }) {
   if (rawWeek >= 1) {
     const flagCount = week === 4 || week === 9 ? (await flagsSince(patient.id, weekWindow(cycle.start_date, week - 2).from)).length : 0;
     decision = weekModeFor({ week, cycle, logs, daysPerWeek: template.days_per_week, flagCount, settings });
-    if (!decision.stored) await saveWeekMode(cycle, week, decision).catch(console.error);
+    if (!decision.stored) await saveWeekMode(cycle, week, decision).catch((e) => console.warn('week mode not saved yet', e?.message ?? e));
   }
   const adjustments = await cycleAdjustments(cycle.id);
   cycle.restart = adjustments.find((a) => a.type === 'comeback_restart')?.detail ?? null;

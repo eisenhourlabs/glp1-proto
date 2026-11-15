@@ -58,7 +58,7 @@ const deps = (tables, callModel, user = 'p1') => ({ db: fakeDb(tables), today: '
   getUser: async (t) => (t === 'ok' ? { id: user } : null), callModel });
 const good = { cycle_type: 'C2', days_per_week: 3, level_changes: [{ pattern: 'SQ', change: 1, evidence: 'Steady Good ratings all cycle.' }],
   swaps: [], recap: 'You trained 24 times this cycle. That consistency is building real strength.', focus: 'Stronger legs', flags: [] };
-const reflection = { worked: ['short_workouts'], in_the_way: ['busy'], adjust: 'same', focus: 'Stairs without stopping', days: 3, minutes: 45, note: 'private note' };
+const reflection = { worked: ['short_workouts'], in_the_way: ['busy'], adjust: 'same', focus: 'Steadier balance', days: 3, minutes: 45, note: 'private note' };
 
 test('auth and timing', async () => {
   assert.equal((await reviewCycle({ token: '', body: {} }, deps(seed(), async () => null))).status, 401);
@@ -73,7 +73,7 @@ test('no API key → the default plan, ready', async () => {
   const t = seed();
   const r = await reviewCycle({ token: 'ok', body: { reflection } }, deps(t, async () => null));
   const p = r.body.proposal;
-  assert.deepEqual([p.source, p.status, p.ai_error, p.final.cycle_type, p.final.focus], ['default', 'ready', 'no_api_key', 'C2', 'Stairs without stopping']);
+  assert.deepEqual([p.source, p.status, p.ai_error, p.final.cycle_type, p.final.focus], ['default', 'ready', 'no_api_key', 'C2', 'Steadier balance']);
   assert.equal(p.reflection.note, 'private note', 'note kept for the team');
   assert.ok(!JSON.stringify(p.input_summary).includes('private note'), 'note never in the AI input');
   const again = await reviewCycle({ token: 'ok', body: {} }, deps(t, async () => { throw new Error('should not be called'); }));
@@ -99,13 +99,35 @@ test('AI output: valid → ready with the AI plan; invalid → pending with the 
   assert.equal(junk.status, 'pending');
 });
 
-test('cleanReflection keeps only known shapes', () => {
-  const r = cleanReflection({ worked: ['a'.repeat(99)], days: '4', minutes: 50, focus: ` ${'f'.repeat(100)} `, note: 'n'.repeat(900) });
-  assert.equal(r.worked[0].length, 40);
+test('cleanReflection keeps only the fixed choices (E4)', () => {
+  const r = cleanReflection({ worked: ['a'.repeat(99), 'energy'], days: '4', minutes: 50, focus: ` ${'f'.repeat(100)} `, adjust: 'more', note: 'n'.repeat(900) });
+  assert.deepEqual(r.worked, ['energy']);
   assert.equal(r.days, 4);
   assert.equal(r.minutes, null);
-  assert.equal(r.focus.length, 80);
-  assert.equal(r.note.length, 500);
+  assert.equal(r.focus, null, 'typed focus dropped');
+  assert.equal(r.adjust, 'more');
+  assert.equal(r.note.length, 500, 'note kept for the team');
+});
+
+test('E4: the AI prompt carries no free text and no ids', async () => {
+  const typed = 'MY-KNEE-SURGERY-NOTE';
+  const t = seed();
+  t.patients[0].id = '7f3c2a10-1b2c-4d5e-8f90-a1b2c3d4e5f6';
+  t.profiles[0].id = t.patients[0].id; t.cycles[0].patient_id = t.patients[0].id;
+  t.cycles[0].id = '0e1d2c3b-4a59-4687-9a0b-c1d2e3f40516';
+  t.session_logs.forEach((l) => { l.cycle_id = t.cycles[0].id; l.patient_id = t.patients[0].id; l.id = `9a8b7c6d-5e4f-4a3b-8c2d-1e0f${String(l.id).padStart(8, '0')}`; });
+  t.flags = [{ patient_id: t.patients[0].id, type: 'pain', detail: { area: 'knees', note: typed }, created_at: '2026-09-20' }];
+  const r = { worked: ['energy', typed], in_the_way: [typed], adjust: typed, focus: typed, days: 3, note: typed, extra: typed };
+  let seen;
+  const res = await reviewCycle({ token: 'ok', body: { reflection: r } },
+    { ...deps(t, async (prompt) => { seen = prompt; return null; }, t.patients[0].id) });
+  assert.equal(res.status, 200);
+  const sent = JSON.stringify(seen);
+  assert.ok(!sent.includes(typed), 'nothing she typed');
+  assert.ok(!/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(sent), 'no uuids');
+  assert.ok(!sent.includes(t.patients[0].id) && !sent.includes(t.cycles[0].id));
+  assert.ok(sent.includes('energy'), 'her chosen chip is there');
+  assert.equal(res.body.proposal.reflection.note, typed, 'the note is still stored for the team');
 });
 
 test('B1: the standard plan applies earned level-ups within her setup ceiling', async () => {

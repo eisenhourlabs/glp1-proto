@@ -25,9 +25,11 @@ const swState = () => page.evaluate(async () => {
 
 await signIn(page);
 await page.getByText('This week’s workouts').waitFor();
-await page.waitForFunction(async () => !!(await navigator.serviceWorker.getRegistration())?.active, null, { timeout: 15000 });
-await page.reload();                                   // now the worker controls the page
-await page.getByText('This week’s workouts').waitFor();
+await page.waitForFunction(async () => (await navigator.serviceWorker.getRegistration())?.active?.state === 'activated', null, { timeout: 15000 });
+// Reload until the worker controls the page (Chromium sometimes needs a second navigation after first activation).
+for (let k = 0; k < 3 && !(await page.evaluate(() => !!navigator.serviceWorker.controller)); k++) {
+  await page.reload(); await page.getByText('This week’s workouts').waitFor();
+}
 if (!(await swState()).controlled) fail('service worker should control the page');
 if (await loadedVersion() !== OLD) fail(`version ${await loadedVersion()}, expected ${OLD}`);
 if (!(await page.locator('.credit').textContent()).includes(OLD)) fail('footer shows the version');
