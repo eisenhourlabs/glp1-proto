@@ -28,6 +28,7 @@ Goal: move the app to accounts owned by Brad's company **without touching any ot
 
 ## 3. Configuration and secrets
 - [ ] `web/config.js`: new `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `ENV`, `BRAND_NAME`, `DEMO_BANNER` (false in prod).
+- [ ] Bump `web/version.js` with that change so installed phones pick up the new settings (they keep the cached version until then).
 - [ ] Operator `.env`: new URL + service key.
 - [ ] **Generate new** VAPID keys, Anthropic key and email key under Brad's accounts. Never reuse the prototype's.
 - [ ] Update the auth Site URL / redirect URLs to the new domain.

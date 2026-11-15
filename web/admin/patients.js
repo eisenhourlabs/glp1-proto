@@ -58,7 +58,7 @@ export async function renderPatients(root) {
       select('Statuses', Object.entries(STATUS), 'status'),
       h('label', { class: 'row check', for: 'att' }, attention, h('span', {}, 'Needs attention'))),
     count,
-    h('div', { class: 'table-wrap' }, h('table', { class: 'data' },
+    h('div', { class: 'table-wrap', tabindex: 0, role: 'region', 'aria-label': 'Table (scrolls sideways)' }, h('table', { class: 'data' },
       h('thead', {}, h('tr', {}, ...['Name', 'Clinic', 'Status', 'Week', 'This week', '14-day', 'Last workout', ''].map((t) => h('th', {}, t)))),
       tbody)),
     h('p', { class: 'small muted' }, '14-day = workouts done ÷ planned over the last 14 days. Call = no workout in 7+ days. Slipping = under 50% over 14 days.')));

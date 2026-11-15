@@ -1,0 +1,6 @@
+{
+  "_note": "Serious/critical axe rules already known when the scan was added (sprint 1 PR 8). They are reported but don't fail CI. Backlog C6 fixes them; remove each one here once fixed. Anything not listed fails CI.",
+  "known": {
+    "color-contrast": "Admin status pills (green/amber text on tinted background) are below 4.5:1. C6 contrast pass."
+  }
+}

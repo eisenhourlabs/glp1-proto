@@ -32,7 +32,9 @@ function buildSeed({ ai }) {
     S.tables.session_logs.push({ id, patient_id: 'u1', cycle_id: 1, week: w, session: s, log_date: day((w - 1) * 7 + k * 2), status: 'done', feel: 'right', energy: 'ok', soreness: 'none', sore_areas: [], workaround_areas: [], scaled: false });
     if (s === 'A') S.tables.exercise_logs.push({ id: 500 + w, session_log_id: id, patient_id: 'u1', slot: sq.slot, exercise_id: sq.exercise_id, sets: [{ reps: 10 + Math.min(w, 4) }], rating: 'good', skipped: false, created_at: `${day((w - 1) * 7)}T10:00:00Z` });
   });
-  const swap = content.library.find((e) => e.pattern === 'HR' && e.level <= 2 && e.active && !S.tables.cycle_items.some((i) => i.exercise_id === e.id) && e.equipment.split(';').every((g) => g.split('|').some((x) => x === 'none' || patient.equipment.includes(x))));
+  const usable = (e) => e.pattern === 'HR' && e.active && !S.tables.cycle_items.some((i) => i.exercise_id === e.id) && e.equipment.split(';').every((g) => g.split('|').some((x) => x === 'none' || patient.equipment.includes(x)));
+  // B2: a preferred pick only wins at her level, so swap to one at her HR level when there is one
+  const swap = content.library.find((e) => usable(e) && e.level === patient.pattern_levels.HR) ?? content.library.find((e) => usable(e) && e.level <= 2);
   if (ai) S.aiReview = { final: { cycle_type: 'C2', days_per_week: 3, level_changes: [{ pattern: 'SQ', change: 1, evidence: 'Reps climbed every week with Good ratings.' }],
     swaps: swap ? [{ pattern: 'HR', exercise_id: swap.id, reason: 'fresh' }] : [], recap: 'Twenty-four workouts and a steady climb in your squats. You built the habit.', focus: 'Stronger legs for stairs and getting up', flags: [] } };
   return { S, swap };

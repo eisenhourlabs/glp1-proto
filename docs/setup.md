@@ -110,16 +110,35 @@ git pull                                                   # get merged changes
 ## Persona speed-run (developer machine with Node)
 See `docs/speedrun.md`: made-up patients through the real engine for 30 weeks, checked against the Framework rules.
 
-## Browser smoke tests (developer machine with Node + Playwright)
-Not part of `npm test`: they need Chromium and the private content export.
+## Browser smoke tests and accessibility scan (developer machine with Node + Playwright)
+CI runs all of them on every pull request (job `browser` in `.github/workflows/pages.yml`) against
+`tests/fixtures/content.synthetic.json`: made-up content (invented names, first field `_synthetic`) built by
+`python scripts/make_synthetic_content.py` and checked by `content_check`. Never import it into a database. Locally,
+run them on the synthetic content or on the real export (more realistic):
 ```
-python scripts/export_content_json.py --out ../content.local.json
-node tests/browser/onboarding.smoke.mjs ../content.local.json [screenshot-dir]
-node tests/browser/workout.smoke.mjs ../content.local.json [screenshot-dir]
-node tests/browser/admin.smoke.mjs ../content.local.json [screenshot-dir]
-node tests/browser/join.smoke.mjs ../content.local.json [screenshot-dir]
-node tests/browser/review.smoke.mjs ../content.local.json [screenshot-dir]
-node tests/browser/age60.smoke.mjs ../content.local.json [screenshot-dir]
-node tests/browser/demo.smoke.mjs ../content.local.json <content folder>/demo_seed.local.json [screenshot-dir]
+npm i -g playwright@1.63.0 axe-core@4.10.3 && npx playwright@1.63.0 install chromium
+F=tests/fixtures/content.synthetic.json                   # or: python scripts/export_content_json.py --out ../content.local.json
+node scripts/demo_data.mjs $F /tmp/demo.json              # or use <content folder>/demo_seed.local.json with the real export
+for t in admin join onboarding review workout age60 comeback lighter update; do node tests/browser/$t.smoke.mjs $F [screenshot-dir]; done
+node tests/browser/demo.smoke.mjs $F /tmp/demo.json [screenshot-dir]
 ```
-They run the real pages against an in-memory fake of Supabase (`tests/browser/fake_supabase.js`). For real QR codes in the staff-kit test: `npm i -g qrcode-generator@2.0.4`.
+They run the real pages against an in-memory fake of Supabase (`tests/browser/fake_supabase.js`, served in place of
+`web/vendor/supabase-js.js`). Accessibility: set `A11Y_REPORT=/tmp/a11y.jsonl` while running them (every screenshot
+point is scanned with axe), then `node scripts/a11y_report.mjs /tmp/a11y.jsonl`. Serious or critical issues fail
+unless listed in `tests/browser/a11y_known.json` (the open list for backlog C6).
+
+## App versions and updates (C5)
+- `web/version.js` holds the one version constant. **Bump it in every PR that changes anything under `web/`** (CI
+  checks). The service worker caches every file for that version; phones keep the old version until the new one is
+  installed, then the home screen shows "Update ready". Nothing changes in the middle of a workout.
+- After adding, renaming or deleting a file under `web/`: `node scripts/sw_assets.mjs` (rewrites the cache list in
+  `web/sw.js`; `npm test` fails until it matches).
+
+## Third-party scripts (A3)
+Self-hosted in `web/vendor/`; the app loads nothing from a CDN. Rebuild with `bash scripts/vendor.sh` (versions are
+pinned there), then run every test and bump `web/version.js`.
+
+| File | Package | Version | License | sha256 |
+|---|---|---|---|---|
+| `web/vendor/supabase-js.js` | `@supabase/supabase-js` (+ auth-js, functions-js, postgrest-js, realtime-js, storage-js 2.117.3; phoenix 0.4.5), bundled with esbuild 0.25.10 | 2.117.3 | MIT | 15b554eeb58cbc747bb92e4610e930a15935b4d5896d780456f202f28d9e2d69 |
+| `web/vendor/qrcode.js` | `qrcode-generator` (`dist/qrcode.mjs`) | 2.0.4 | MIT | f34620800b9854f6877235e81d5ee5fe5dbe744f74da114b034fe907cf9d5b3f |

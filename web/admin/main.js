@@ -2,7 +2,8 @@
 //   #patients  #patient/<id>  #flags  #clinics  #settings
 import { mountShell, signOutButton } from '../shared/shell.js';
 import { h, clear } from '../shared/dom.js';
-import { CONFIG } from '../config.js';
+import { CONFIG, APP_VERSION } from '../config.js';
+import { updateSlot, watchForUpdate } from '../shared/update.js';
 import { renderPatients } from './patients.js';
 import { renderPatient } from './patient.js';
 import { renderFlags } from './flags.js';
@@ -20,7 +21,9 @@ mountShell({
   async render(profile, root) {
     const nav = h('nav', { class: 'tabs no-print', 'aria-label': 'Admin sections' });
     const body = h('div', {});
-    root.append(h('header', { class: 'app-header no-print' }, h('div', { class: 'brand' }, `${CONFIG.BRAND_NAME} · Admin`), signOutButton()), nav, body);
+    root.append(h('header', { class: 'app-header no-print' }, h('div', { class: 'brand' }, `${CONFIG.BRAND_NAME} · Admin`), signOutButton()), h('div', { class: 'no-print' }, updateSlot()), nav, body,
+      h('p', { class: 'credit no-print' }, `Version ${APP_VERSION}`));
+    watchForUpdate();
 
     const route = async () => {
       const [name, arg] = (location.hash.replace(/^#/, '') || 'patients').split('/');

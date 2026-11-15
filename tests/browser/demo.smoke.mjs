@@ -88,7 +88,8 @@ await as('dana', '', 'demo-dana-later', async ({ page, snap }) => {
   if (!/Cycle complete/.test(eyebrow) || /Week 9 of 9/.test(eyebrow)) fail(`dana later: eyebrow "${eyebrow}"`);
 }, addDays(TODAY, 14));
 await as('lisa', '', 'demo-lisa', async ({ page, snap }) => {
-  await page.getByText('Welcome back! Today is a little lighter').waitFor(); await snap('home');
+  // welcome_back or reentry: the simulated gap depends on the content the seed was built from (8–13 or 14–27 days)
+  await page.getByText(/Welcome back! (Today is a little lighter|Your next two workouts are lighter)/).waitFor(); await snap('home');
   await oneNotice(page, 'lisa', 'comeback');
 });
 await as('maria', '', 'demo-maria', async ({ page, snap }) => {

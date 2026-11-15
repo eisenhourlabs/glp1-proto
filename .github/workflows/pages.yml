@@ -43,9 +43,59 @@ jobs:
           python3 -m py_compile scripts/*.py
           python3 -m unittest discover -s tests/py -v
 
+  # Browser tests and the accessibility scan (A18), on the made-up content in tests/fixtures/ (the real programming
+  # content is private). Screenshots are uploaded when something fails.
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: App version bumped (C5)
+        if: github.event_name == 'pull_request'
+        run: |
+          base=$(git merge-base "origin/${{ github.base_ref }}" HEAD)
+          changed=$(git diff --name-only "$base" HEAD -- web/ | grep -v '^web/version.js$' || true)
+          if [ -n "$changed" ] && git diff --quiet "$base" HEAD -- web/version.js; then
+            echo "::error::Files under web/ changed but web/version.js did not. Bump the version so phones pick up the new files."
+            echo "$changed"; exit 1
+          fi
+      - name: Synthetic content is current and passes content_check
+        run: |
+          python3 -m pip install --quiet "openpyxl>=3.1,<4"
+          python3 scripts/make_synthetic_content.py --check
+      - name: Install Playwright (Chromium) and axe-core
+        run: |
+          npm i -g playwright@1.63.0 axe-core@4.10.3
+          npx --yes playwright@1.63.0 install --with-deps chromium
+      - name: Browser smokes + accessibility scan
+        env:
+          A11Y_REPORT: /tmp/a11y.jsonl
+        run: |
+          F=tests/fixtures/content.synthetic.json
+          mkdir -p /tmp/shots
+          node scripts/demo_data.mjs "$F" /tmp/demo.synthetic.json
+          fail=0
+          for t in admin join onboarding review workout age60 comeback lighter update; do
+            echo "::group::$t"; node "tests/browser/$t.smoke.mjs" "$F" /tmp/shots || fail=1; echo "::endgroup::"
+          done
+          echo "::group::demo"; node tests/browser/demo.smoke.mjs "$F" /tmp/demo.synthetic.json /tmp/shots || fail=1; echo "::endgroup::"
+          node scripts/a11y_report.mjs /tmp/a11y.jsonl || fail=1
+          exit $fail
+      - name: Screenshots (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-screenshots
+          path: /tmp/shots
+          retention-days: 7
+
   deploy:
     if: github.event_name != 'pull_request'
-    needs: test
+    needs: [test, browser]
     runs-on: ubuntu-latest
     environment:
       name: github-pages

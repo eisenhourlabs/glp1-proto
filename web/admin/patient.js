@@ -54,11 +54,11 @@ export async function renderPatient(root, { id, admin }) {
         ? h('p', { class: 'small' }, 'Week decisions: ', Object.entries(cycle.week_modes).map(([w, m]) => `week ${w}: ${m.mode}${m.restReasons?.length ? ` (${m.restReasons.join(', ')})` : ''}`).join(' · '))
         : null,
       h('ol', { class: 'weeks' }, weeks.map((w) => h('li', { class: 'week-row' }, h('span', { class: 'week-n' }, `Week ${w.week}`),
-        h('span', { class: 'dots' }, Array.from({ length: w.planned }, (_, i) => h('span', { class: `dot${i < w.done ? ' on' : ''}` }))))))) : null,
+        h('span', { class: 'dots', role: 'img', 'aria-label': `${w.done} of ${w.planned}` }, Array.from({ length: w.planned }, (_, i) => h('span', { class: `dot${i < w.done ? ' on' : ''}` }))))))) : null,
 
     h('section', { class: 'card' },
       h('h2', {}, 'Workouts and check-ins'),
-      d.logs.length ? h('div', { class: 'table-wrap' }, h('table', { class: 'data' },
+      d.logs.length ? h('div', { class: 'table-wrap', tabindex: 0, role: 'region', 'aria-label': 'Table (scrolls sideways)' }, h('table', { class: 'data' },
         h('thead', {}, h('tr', {}, ...['Date', 'Workout', 'Status', 'Energy', 'Felt', 'Soreness', 'Work-around', 'Note'].map((t) => h('th', {}, t)))),
         h('tbody', {}, d.logs.map((l) => h('tr', {},
           h('td', { class: 'nowrap' }, short(l.log_date)),

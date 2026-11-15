@@ -6,7 +6,8 @@ import { CONFIG } from '../config.js';
 import { joinLink, normalizeCode } from '../shared/enroll_rules.js';
 import { clinics as loadClinics } from './api.js';
 
-const QR_LIB = 'https://cdn.jsdelivr.net/npm/qrcode-generator@2.0.4/dist/qrcode.mjs';
+// QR codes: qrcode-generator (MIT), self-hosted in web/vendor/ (scripts/vendor.sh), loaded only on this page.
+const QR_LIB = '../vendor/qrcode.js';
 const SVG = 'http://www.w3.org/2000/svg';
 
 /** A QR code as an SVG element (drawn from the module grid; no markup strings). */

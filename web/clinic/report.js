@@ -82,7 +82,7 @@ const stat = (big, small) => h('div', { class: 'stat' }, h('span', { class: 'sta
 
 function table(head, rows) {
   if (!rows.length) return h('p', { class: 'muted' }, 'No patients yet.');
-  return h('div', { class: 'table-wrap' }, h('table', { class: 'data' },
+  return h('div', { class: 'table-wrap', tabindex: 0, role: 'region', 'aria-label': 'Table (scrolls sideways)' }, h('table', { class: 'data' },
     h('thead', {}, h('tr', {}, head.map((t) => h('th', {}, t)))),
     h('tbody', {}, rows.map((r) => h('tr', {}, r.map((c) => h('td', {}, String(c ?? '—'))))))));
 }
