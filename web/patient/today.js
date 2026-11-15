@@ -6,6 +6,7 @@ import { baseItems, planSession, applyHold } from '../engine/session.js';
 import { withBalance } from '../engine/cycle.js';
 import { makeEasier, applyWorkarounds, applySoreness, scaleToday } from '../engine/readiness.js';
 import { isSixtyPlus } from '../engine/util.js';
+import { shortVersion } from '../engine/lighter.js';
 import { applyHoldAndTrim, extraSetSlots, applyExtraSets } from '../engine/checkin.js';
 import { engineProfile } from './api.js';
 import { exerciseHistory } from './log_api.js';
@@ -14,7 +15,7 @@ import { PRE_SESSION, ENERGY_OPTIONS, AREA_OPTIONS, SCALE_TODAY } from './sessio
 /**
  * A planner for one workout. env: { patient, cycle, content, settings, week, weekMode, comeback, excludeSession,
  *   standing: areas kept as work-arounds since a pain report (B7), capNo: the cycle number the age rules count from }
- * today: { energy, areas: [], scale: bool, easier: bool, soreAreas: [] }
+ * today: { energy, areas: [], scale: bool, easier: bool, soreAreas: [], short: bool (the short version, B9) }
  */
 export function makePlanner(env, today) {
   const { patient, cycle, content, settings, week, weekMode, comeback } = env;
@@ -47,6 +48,7 @@ export function makePlanner(env, today) {
     /** Today's items for a session, in order. */
     async build(session) {
       let items = baseItems(cycle.items, session, cycleSlots, lib);
+      if (today.short) items = shortVersion(items, { ageBand: patient.age_band });
       if (today.easier) items = makeEasier(items, profile, lib);
       if (areasToday().length) items = applyWorkarounds(items, areasToday(), profile, lib).items;
       return plan(items.filter((it) => it.exercise));
@@ -80,10 +82,10 @@ export function warmupFor(warmups, patient) {
 }
 
 /**
- * The readiness screen. onStart({ energy, areas, scale, easier }) begins the workout; onBack returns home.
+ * The readiness screen. onStart({ energy, areas, scale, easier, short }) begins the workout; onBack returns home.
  */
 export function renderReadiness(root, { sessionName, onStart, onBack, standing = [], onBetter }) {
-  const a = { energy: null, areas: [], scale: false, easier: false };
+  const a = { energy: null, areas: [], scale: false, easier: false, short: false };
   const msg = statusLine();
   const scaleBox = h('div', {});
   const paintScale = () => {
@@ -111,6 +113,10 @@ export function renderReadiness(root, { sessionName, onStart, onBack, standing =
       h('div', { class: 'q' }, h('p', {}, 'Energy today'),
         choices({ columns: 3, options: ENERGY_OPTIONS, value: null, label: 'Energy today', onChange: (v) => { a.energy = v; paintScale(); } })),
       scaleBox,
+      h('div', { class: 'q', 'data-short': '' }, h('p', {}, 'Short on time or energy?'),
+        choices({ multi: true, value: [], onChange: (v) => { a.short = v.includes('short'); },
+          options: [{ value: 'short', label: 'Do the short version: your two main lifts and one finisher, about 15 minutes' }] }),
+        h('p', { class: 'small muted' }, 'The short version counts fully.')),
       standingCard(standing, onBetter),
       h('div', { class: 'q' }, h('p', {}, 'Anything to work around today?'), areaChoices),
       h('div', { class: 'card soft' }, h('h2', {}, 'Before you start'), h('ul', {}, PRE_SESSION.map((t) => h('li', {}, t)))),

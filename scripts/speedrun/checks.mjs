@@ -29,6 +29,7 @@ export const RULES = {
   balance_60: 'A full 60+ week with fewer than 2 workouts containing balance (§4, B4)',
   offer_early: 'An in-cycle level-up offer before week 4 of a cycle (§5.3, B6)',
   offer_repeat: 'A level-up offer repeated within 14 days of "Not yet" (§5.3, B6)',
+  self_lighter_max: 'More patient-chosen lighter weeks in a cycle than allowed (B9)',
 };
 export const WATCH = {
   levelup_not_applied: 'Level-up earned but never applied (B1, B6; offers are now made and applied, so this stays 0)',

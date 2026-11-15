@@ -78,6 +78,7 @@ function weekMd(w) {
   for (const s of w.sessions) {
     const tags = [s.weekMode !== 'build' && s.weekMode, s.comeback !== 'none' && `comeback ${s.comeback}${s.second ? ' (2nd lighter session)' : ''}`,
       s.standing?.length && `standing work-around ${s.standing.join(', ')}`, s.scaled && 'scaled',
+      s.roughWeek && `rough week: ${s.roughWeek}`, s.selfLighter && 'lighter (her choice)', s.short && 'short version',
       s.holdAndTrim && 'hold and trim', s.lighterByCheckin && 'lighter (check-ins)'].filter(Boolean);
     const ci = s.checkin;
     L.push(`- **${s.letter}** ${s.date}${tags.length ? ` [${tags.join(', ')}]` : ''} · check-in ${ci.feel}/${ci.energy}${ci.sore.length ? ` sore ${ci.soreness}: ${ci.sore.join(', ')}` : ''}${ci.areas.length ? ` · work-around ${ci.areas.join(', ')}` : ''}${ci.pain ? ` · pain ${ci.pain}` : ''}`);

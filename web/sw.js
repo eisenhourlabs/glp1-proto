@@ -40,6 +40,7 @@ const ASSETS = [
   './engine/util.js',
   './engine/home_state.js',
   './engine/offers.js',
+  './engine/lighter.js',
   './engine/resolve.js',
   './engine/load.js',
   './engine/levels.js',

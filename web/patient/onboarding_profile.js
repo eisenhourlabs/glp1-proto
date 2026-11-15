@@ -155,7 +155,7 @@ function goal(ctx) {
     lead: 'We’ll show this back to you along the way.',
     body: [
       choices({ value: a.goal, onChange: (v) => { a.goal = v; }, options: [
-        { value: 'keep_muscle', label: 'Keep my muscle while I lose weight' },
+        { value: 'keep_muscle', label: 'Keep my muscle' },
         { value: 'everyday_strength', label: 'Make everyday life easier', hint: 'Stairs, groceries, getting up off the floor' },
         { value: 'look_feel', label: 'Feel stronger and more toned' },
         { value: 'habit', label: 'Build a habit I’ll keep' }] }),

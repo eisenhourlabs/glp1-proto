@@ -6,6 +6,7 @@
 
 import { startingLevels, startingCycle } from '../../web/engine/levels.js';
 import { levelUpOffers, OFFER_DEFAULTS } from '../../web/engine/offers.js';
+import { selfLighterState, selfLighterRange, shortVersion } from '../../web/engine/lighter.js';
 import { chooseTemplate, materializeCycle, weekOfCycle, weekModeMessage } from '../../web/engine/cycle.js';
 import { findYourWeight, roundDownToStep, BAND_LABELS } from '../../web/engine/load.js';
 import { swapNote } from '../../web/engine/resolve.js';
@@ -153,9 +154,19 @@ export function runPersona(p, content, { weeks = 30 } = {}) {
     const gapDays = last && last.cycleStart === cycle.start_date ? daysBetween(last.date, date) : null;
     const active = activeAdjustments({ adjustments, logs: cycleLogs, week: cw });
     const lighterByCheckin = active.lighterWeek && mode === 'build';
-    const weekMode = lighterByCheckin ? 'lighter' : mode;
+    // "Rough week?" (B9): she taps the switch before this workout when the persona says `lighter`.
+    const before = selfLighterState({ adjustments, today: date, weekMode: lighterByCheckin ? 'lighter' : mode, settings });
+    let roughWeek = null;
+    if (s.lighter) {
+      roughWeek = before.canStart ? 'switched' : before.active ? 'already' : 'not offered';
+      if (before.canStart) adjustments.push({ type: 'self_lighter_week', reason: 'patient_choice', detail: selfLighterRange(date, settings), g: curG, created_at: `${date}T07:00:00Z` });
+    }
+    const self = selfLighterState({ adjustments, today: date, weekMode: lighterByCheckin ? 'lighter' : mode, settings });
+    if (self.used > self.max) out.violations.push({ rule: 'self_lighter_max', cycle: cycle.cycle_no, date, detail: `${self.used} lighter weeks` });
+    const weekMode = lighterByCheckin || self.active ? 'lighter' : mode;
     const sessPlan = cycle.plan.sessions.find((x) => x.session === s.letter);
     let items = sessPlan.items.filter((it) => it.exercise);
+    if (s.short) items = shortVersion(items, { ageBand: p.age_band });
     const areas = [...new Set([...(s.areas || []), ...(s.pain ? [s.pain] : []), ...standing])];
     const profile = profileOf();
     const swaps = [];
@@ -194,7 +205,7 @@ export function runPersona(p, content, { weeks = 30 } = {}) {
     const checked = lines.map((l) => ({ ...l, checks: lineChecks(l, ctx) }));
     for (const l of checked) out.violations.push(...l.checks.map((c) => ({ ...c, cycle: cycle.cycle_no, date, slot: l.slot, exercise: l.id })));
     out.violations.push(...sessionChecks({ gapDays, comeback: comeback.mode, settings }).map((c) => ({ ...c, cycle: cycle.cycle_no, date })));
-    return { letter: s.letter, date, cw, weekMode, comeback: comeback.mode, second: Boolean(comeback.second), standing, offers, scaled, holdAndTrim: active.holdAndTrim, lighterByCheckin, extraSets: extra, swaps,
+    return { letter: s.letter, date, cw, weekMode, selfLighter: self.active, roughWeek, short: Boolean(s.short), comeback: comeback.mode, second: Boolean(comeback.second), standing, offers, scaled, holdAndTrim: active.holdAndTrim, lighterByCheckin, extraSets: extra, swaps,
       checkin: { feel: log.feel, energy: log.energy, soreness: log.soreness, sore: log.sore_areas, areas: log.workaround_areas, pain: s.pain || null },
       triggered: act.adjustments.map((a) => `${a.type} (${a.reason})`), flagsRaised: act.flags.map((f) => f.detail?.reason ?? f.type),
       messages: act.messages, lines: checked };
