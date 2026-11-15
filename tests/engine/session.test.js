@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { sessionOrder, baseItems, weekStatus, trainedOn, weekWindow, weekModeFor, workingSets, lastPerformance,
-  weightLabel, lastTimeText, planSession, applyHold, swapOptions, sessionSummary } from '../../web/engine/session.js';
+  weightLabel, lastTimeText, planSession, applyHold, swapOptions, sessionSummary, cutApplies } from '../../web/engine/session.js';
 import { applySoreness } from '../../web/engine/readiness.js';
 import { LIBRARY, slot, GYM } from './fixtures.js';
 
@@ -178,4 +178,12 @@ test('B3: planSession carries the band stage and its tempo line', () => {
   const out = planSession([it], { week: 3, history: hist })[0];
   assert.deepEqual([out.suggestion.action, out.weight, out.suggestion.stage], ['tempo', 2, 1]);
   assert.equal(out.suggestion.tempo, 'Lower for 3 seconds on every rep.');
+});
+
+test('B7: cutApplies — the second lighter session does not cut a weight twice', () => {
+  const rows = [{ sets: [{ weight: 10, reps: 10 }], skipped: false, created_at: '2026-03-16T12:00:00Z' }];
+  assert.equal(cutApplies(rows, { mode: 'reentry' }), true, 'first lighter session: cut everything');
+  assert.equal(cutApplies(rows, { mode: 'reentry', cutBefore: '2026-03-16' }), false, 'done in the first lighter session');
+  assert.equal(cutApplies([{ ...rows[0], created_at: '2026-02-20T12:00:00Z' }], { mode: 'reentry', cutBefore: '2026-03-16' }), true, 'last done before the gap');
+  assert.equal(cutApplies([], { mode: 'reentry', cutBefore: '2026-03-16' }), true);
 });

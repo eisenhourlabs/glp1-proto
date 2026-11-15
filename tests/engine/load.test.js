@@ -117,8 +117,27 @@ test('hold weeks never increase', () => {
   }
 });
 
-test('bodyweight progresses by tempo/level; equipment ceiling → level-up check', () => {
-  assert.equal(suggestNext({ loadType: 'bodyweight', last: last(null, [12, 12], 'good'), range: R }).action, 'progress-bodyweight');
+test('B6: bodyweight ladder reps → 3-s lowering → 1-s pause → level-up check', () => {
+  const bw = (reps, rating, stage = 0) => ({ weight: null, sets: reps.map((n) => ({ reps: n })), rating, stage });
+  const s1 = suggestNext({ loadType: 'bodyweight', last: bw([12, 12], 'good'), range: R });
+  assert.deepEqual([s1.action, s1.stage], ['tempo', 1]);
+  const s2 = suggestNext({ loadType: 'bodyweight', last: bw([12, 12], 'good', 1), range: R });
+  assert.deepEqual([s2.action, s2.stage], ['tempo', 2]);
+  const s3 = suggestNext({ loadType: 'bodyweight', last: bw([12, 12], 'easy', 2), range: R });
+  assert.deepEqual([s3.action, s3.stage], ['level-up-check', 2]);
+  assert.deepEqual([suggestNext({ loadType: 'bodyweight', last: bw([11, 12], 'good', 1), range: R }).action], ['hold'], 'not all at the top');
+  assert.equal(suggestNext({ loadType: 'bodyweight', last: bw([12, 12], 'good'), range: R, ageBand: '60-69' }).action, 'hold', '60+: top + 2 first');
+  assert.equal(suggestNext({ loadType: 'bodyweight', last: bw([14, 14], 'good'), range: R, ageBand: '60-69' }).stage, 1);
+  assert.deepEqual([suggestNext({ loadType: 'bodyweight', last: bw([7, 8], 'hard', 2), range: R }).stage], [1], 'below the range: a step back');
+  assert.equal(suggestNext({ loadType: 'bodyweight', last: bw([7, 8], 'hard'), range: R }).action, 'level-down-check');
+  assert.equal(suggestNext({ loadType: 'bodyweight', last: bw([12, 12], 'good'), range: R, weekMode: 'consolidate' }).action, 'hold');
+  const two = { 'bodyweight.sessions_per_step': 2 };
+  assert.equal(suggestNext({ loadType: 'bodyweight', last: bw([12, 12], 'good'), older: bw([10, 10], 'good'), range: R, settings: two }).action, 'hold');
+  assert.equal(suggestNext({ loadType: 'bodyweight', last: bw([12, 12], 'good'), older: bw([12, 12], 'good'), range: R, settings: two }).stage, 1);
+  assert.equal(suggestNext({ loadType: 'bodyweight', last: bw([30, 30], 'good'), range: { lo: 20, hi: 30 }, measure: 'time' }).action, 'level-up-check', 'a hold at the top');
+});
+
+test('equipment ceiling → level-up check', () => {
   const capped = suggestNext({ loadType: 'dumbbell', last: last(15, [12, 12, 12], 'good'), range: R, available: [5, 10, 15] });
   assert.equal(capped.action, 'level-up-check');
 });

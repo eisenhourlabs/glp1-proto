@@ -21,9 +21,11 @@ export function indexMd(results, meta) {
   L.push(`${results.length} personas × ${meta.weeks} weeks · content ${meta.content ?? '?'} · engine ${meta.engine ?? 'working copy'} · ran in ${meta.ms} ms`, '');
   const allV = results.flatMap((r) => r.violations.map((v) => ({ ...v, who: r.persona.name })));
   L.push(`**Framework violations: ${allV.length}**`, '');
-  L.push('| Persona | Cycles | Workouts | Levels at the end | Violations | Watch items |', '|---|---|---|---|---|---|');
+  L.push('| Persona | Cycles | Workouts | Levels at the end | Level-up offers (first) | Violations | Watch items |', '|---|---|---|---|---|---|---|');
   for (const r of results) {
-    L.push(`| [${r.persona.name}](${r.persona.key}.md) | ${r.cycles.map((c) => c.type).join(' → ')} | ${r.final.workouts} | ${lv(r.final.levels)} | ${r.violations.length} | ${fmtTally(tally(r.watch))} |`);
+    const ups = r.levelUps || []; const first = ups[0];
+    const offers = ups.length ? `${ups.length} (${ups.filter((u) => u.outcome === 'accepted').length} accepted; first cycle ${first.cycle} week ${first.week})` : 'none';
+    L.push(`| [${r.persona.name}](${r.persona.key}.md) | ${r.cycles.map((c) => `${c.type}${c.restart ? ' (restart)' : ''}`).join(' → ')} | ${r.final.workouts} | ${lv(r.final.levels)} | ${offers} | ${r.violations.length} | ${fmtTally(tally(r.watch))} |`);
   }
   L.push('', '## Watch items (known gaps sprint 1 is fixing)', '', '| Item | Count | What it means |', '|---|---|---|');
   const wt = tally(results.flatMap((r) => r.watch));
@@ -47,13 +49,13 @@ export function personaMd(r) {
   for (const n of r.notes) L.push(`> Week ${n.week}: ${n.text}`);
   const weeksBy = (no) => r.weeks.filter((w) => w.cycle === no);
   for (const c of r.cycles) {
-    L.push('', `## Cycle ${c.no}: ${c.template.name} (${c.template.id}), starts ${c.start}`, '', `Levels: ${lv(c.levels)} · setup ${c.setup}${c.skipped ? ` · ${c.skipped} slot(s) with no option` : ''}`, '');
+    L.push('', `## Cycle ${c.no}: ${c.template.name} (${c.template.id}), starts ${c.start}${c.restart ? ' · restart after 28+ days away (same exercises, levels kept)' : ''}`, '', `Levels: ${lv(c.levels)} · setup ${c.setup}${c.skipped ? ` · ${c.skipped} slot(s) with no option` : ''}`, '');
     for (const s of c.plan) {
       L.push(`- **${s.session} ${esc(s.name)}**: ${s.items.map((i) => `${i.slot} ${i.pattern} ${i.name ? `${esc(i.name)} L${i.level}` : '(no option)'}${i.note ? ` _(${i.note})_` : ''}`).join(' · ')}`);
     }
     for (const w of weeksBy(c.no)) L.push(...weekMd(w));
     const ups = r.levelUps.filter((u) => u.cycle === c.no);
-    if (ups.length) L.push('', `**Level-ups earned this cycle (offer rule, §5.3):** ${ups.map((u) => `${esc(u.name)} (${u.pattern}) week ${u.week}`).join('; ')}`);
+    if (ups.length) L.push('', `**In-cycle level-up offers (B6):** ${ups.map((u) => `week ${u.week} ${u.pattern} ${u.from} → ${u.to}: ${esc(u.name)} → ${esc(u.next)} (${u.outcome})`).join('; ')}`);
     if (c.review) {
       const v = c.review.validation;
       L.push('', `**Review ${c.review.date}:** adherence ${c.review.adherence}% (${c.review.completed} workouts) → next ${c.review.next}; level changes ${c.review.level_changes.map((x) => `${x.pattern} ${x.change > 0 ? '+1' : '−1'}`).join(', ') || 'none'}; swaps ${c.review.swaps.length}; validator ${v.errors.length ? `ERRORS ${v.errors.join('; ')}` : 'ok'}${v.review.length ? `; review: ${v.review.join('; ')}` : ''}`);
@@ -74,7 +76,8 @@ function weekMd(w) {
   if (w.modeMsg) L.push(`_${w.modeMsg}_`);
   if (!w.sessions.length) L.push('No workouts.');
   for (const s of w.sessions) {
-    const tags = [s.weekMode !== 'build' && s.weekMode, s.comeback !== 'none' && `comeback ${s.comeback}`, s.scaled && 'scaled',
+    const tags = [s.weekMode !== 'build' && s.weekMode, s.comeback !== 'none' && `comeback ${s.comeback}${s.second ? ' (2nd lighter session)' : ''}`,
+      s.standing?.length && `standing work-around ${s.standing.join(', ')}`, s.scaled && 'scaled',
       s.holdAndTrim && 'hold and trim', s.lighterByCheckin && 'lighter (check-ins)'].filter(Boolean);
     const ci = s.checkin;
     L.push(`- **${s.letter}** ${s.date}${tags.length ? ` [${tags.join(', ')}]` : ''} · check-in ${ci.feel}/${ci.energy}${ci.sore.length ? ` sore ${ci.soreness}: ${ci.sore.join(', ')}` : ''}${ci.areas.length ? ` · work-around ${ci.areas.join(', ')}` : ''}${ci.pain ? ` · pain ${ci.pain}` : ''}`);
@@ -82,6 +85,7 @@ function weekMd(w) {
     for (const l of s.lines) {
       L.push(`  - ${l.slot} ${esc(l.name)} L${l.level}: ${l.sets}×${l.range} @${l.rir} ${l.weightLabel}${l.found ? ' (found)' : ''} → ${l.reps} ${l.rating} · ${l.action}${l.soreArea ? ` · held (sore ${l.soreArea})` : ''}`);
     }
+    for (const o of s.offers || []) L.push(`  - **level-up offer:** ${o.pattern} ${o.from} → ${o.to}, ${esc(o.name)} → ${esc(o.next)} (${o.outcome})`);
     for (const t of s.triggered) L.push(`  - **adjustment:** ${t}`);
     for (const f of s.flagsRaised) L.push(`  - **flag:** ${f}`);
   }

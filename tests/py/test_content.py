@@ -101,6 +101,14 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(len(err), 3)
         self.assertIn("levelup.min_sessions: 0 is outside 1–30", err[0])
 
+    def test_offer_ranges(self):
+        from content_check import _check_settings
+        err = []
+        _check_settings({"levelup.offer_min_week": 4, "levelup.offer_decline_days": 14, "bodyweight.sessions_per_step": 1}, err)
+        self.assertEqual(err, [])
+        _check_settings({"levelup.offer_min_week": 2, "levelup.offer_decline_days": 3, "bodyweight.sessions_per_step": 0}, err)
+        self.assertEqual(len(err), 3)
+
 
 class EligibilityTests(unittest.TestCase):
     def ex(self, **kw):

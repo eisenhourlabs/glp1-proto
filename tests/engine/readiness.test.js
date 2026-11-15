@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { scaleToday, makeEasier, applyWorkarounds, applySoreness } from '../../web/engine/readiness.js';
+import { scaleToday, makeEasier, applyWorkarounds, applySoreness, standingAreas } from '../../web/engine/readiness.js';
 import { resolveSession } from '../../web/engine/resolve.js';
 import { LIBRARY, slot, GYM } from './fixtures.js';
 
@@ -40,4 +40,14 @@ test('soreness keeps exercises, holds load, trims secondaries', () => {
   assert.equal(items[0].dose.sets, 3, 'primary keeps sets');
   assert.equal(items[1].dose.sets, 2, 'secondary −1');
   assert.ok(items[0].holdLoad);
+});
+
+test('B7: standing work-around after a pain report until "Feeling better"', () => {
+  const pain = (area, at) => ({ type: 'pain', detail: { area }, created_at: at });
+  const clear = (area, at) => ({ type: 'workaround_cleared', detail: { area }, created_at: at });
+  assert.deepEqual(standingAreas([pain('knees', '2026-03-02T10:00:00Z'), pain('shoulders', '2026-03-03T10:00:00Z')]), ['knees', 'shoulders']);
+  assert.deepEqual(standingAreas([pain('knees', '2026-03-02T10:00:00Z')], [clear('knees', '2026-03-05T10:00:00Z')]), []);
+  assert.deepEqual(standingAreas([pain('knees', '2026-03-02T10:00:00Z'), pain('knees', '2026-03-09T10:00:00Z')], [clear('knees', '2026-03-05T10:00:00Z')]),
+    ['knees'], 'a new report after "Feeling better" starts it again');
+  assert.deepEqual(standingAreas([{ type: 'pain', detail: {} }, { type: 'dizzy', detail: { area: 'hips' } }]), []);
 });

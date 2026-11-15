@@ -82,20 +82,6 @@ function startingCycle({ experience, check = {} } = {}) {
 }
 
 /**
- * Offer the next level for a pattern (§5.3)? recent: last sessions on that pattern's exercise, newest last,
- * each { allTop: boolean, rating }. Offer when 2 of the last 3 hit the top of the range rated good/easy at the
- * heaviest load she has (atCeiling), or when she finished a cycle at this level progressing with no flags.
- */
-function shouldOfferLevelUp({ level, recent = [], atCeiling = false, cleanCycleAtLevel = false, maxLevel = 4,
-  cycleType = null, week = null }) {
-  if (level >= maxLevel) return false;
-  if (cycleType === 'C1' && week != null && week < 3) return false;   // Foundations weeks 1–2 are technique weeks
-  const last3 = recent.slice(-3);
-  const good = last3.filter((r) => r.allTop && (r.rating === 'good' || r.rating === 'easy')).length;
-  return (atCeiling && good >= 2) || cleanCycleAtLevel;
-}
-
-/**
  * Drop a level for a pattern (§5.3, automatic and reversible): "too hard" with missed reps at the lowest load for
  * 2 sessions, or 2+ work-around/pain flags on the pattern within 14 days.
  */
@@ -151,7 +137,7 @@ function reviewLevelUps(summary, { settings, ceilings = {} } = {}) {
   }
   return { changes, held };
 }
-return { startingLevels, startingCycle, shouldOfferLevelUp, shouldDropLevel, LEVELUP_DEFAULTS, reviewLevelUps };
+return { startingLevels, startingCycle, shouldDropLevel, LEVELUP_DEFAULTS, reviewLevelUps };
 })();
 
 // ── web/engine/resolve.js ──
@@ -328,16 +314,37 @@ function bestStreak(sessions) {
 }
 
 /**
- * Comeback mode from the gap since her last completed session (§13).
- * @returns {{mode: 'none'|'welcome_back'|'reentry'|'restart', setDelta: number, loadCutPct: number, sessions: number}}
+ * Comeback mode from the gap since her last completed session (§13, backlog B7, Amanda packet Q9).
+ *   8–13 days: one welcome-back session (−1 set, loads −10%).
+ *   14–27 days: two lighter sessions (−1 set, loads −15%). prior = { gap, date }: the gap before her last workout and
+ *     that workout's date. When that gap was 14–27 days, today is the second lighter session; its load cut only
+ *     applies to exercises last done before `date` (cutBefore; see session.js cutApplies).
+ *   28+ days: restart (loads −20%; the app restarts the cycle at week 1, see restartDue).
+ * @returns {{mode: 'none'|'welcome_back'|'reentry'|'restart', setDelta: number, loadCutPct: number, sessions: number,
+ *            second?: true, cutBefore?: string}}
  */
-function comebackMode(lastSessionDate, today, settings) {
-  if (!lastSessionDate) return { mode: 'none', setDelta: 0, loadCutPct: 0, sessions: 0 };
+function comebackMode(lastSessionDate, today, settings, prior = null) {
+  const none = { mode: 'none', setDelta: 0, loadCutPct: 0, sessions: 0 };
+  if (!lastSessionDate) return none;
   const gap = daysBetween(lastSessionDate, today);
   if (gap >= cfg(settings, 'comeback.restart_days')) return { mode: 'restart', setDelta: 0, loadCutPct: 20, sessions: 0 };
   if (gap >= cfg(settings, 'comeback.reentry_days')) return { mode: 'reentry', setDelta: -1, loadCutPct: 15, sessions: 2 };
   if (gap >= cfg(settings, 'comeback.welcome_back_days')) return { mode: 'welcome_back', setDelta: -1, loadCutPct: 10, sessions: 1 };
-  return { mode: 'none', setDelta: 0, loadCutPct: 0, sessions: 0 };
+  if (prior?.gap != null && prior.gap >= cfg(settings, 'comeback.reentry_days') && prior.gap < cfg(settings, 'comeback.restart_days')) {
+    return { mode: 'reentry', setDelta: -1, loadCutPct: 15, sessions: 2, second: true, cutBefore: prior.date ?? lastSessionDate };
+  }
+  return none;
+}
+
+/**
+ * Restart the cycle at week 1 (§13 28+ days, B7)? Only for a restart-length gap that began inside the cycle's training
+ * weeks (her last workout in this cycle was before week 9, or she hasn't trained in it yet), from week 2 on, and not
+ * once the cycle's review plan exists. A gap after week 9 goes to the review as usual; the new cycle starts lighter.
+ * lastWeekInCycle: the latest week she completed a workout in this cycle, or null.
+ */
+function restartDue({ mode, rawWeek, lastWeekInCycle = null, proposalReady = false }) {
+  if (mode !== 'restart' || proposalReady || rawWeek < 2) return false;
+  return lastWeekInCycle == null || lastWeekInCycle < 9;
 }
 
 /** Clinic "worth a check-in call" flag: no completed workout in 7 days (enrolled, past her start date). */
@@ -350,7 +357,7 @@ function needsCheckInCall(lastSessionDate, startDate, today, days = 7) {
 function isSlipping(planned2w, completed2w) {
   return planned2w > 0 && completed2w / planned2w < 0.5;
 }
-return { DEFAULTS, adherence, forgivingStreak, bestStreak, comebackMode, needsCheckInCall, isSlipping };
+return { DEFAULTS, adherence, forgivingStreak, bestStreak, comebackMode, restartDue, needsCheckInCall, isSlipping };
 })();
 
 // ── web/engine/cycle.js ──
@@ -520,7 +527,7 @@ return { DEFAULTS, weekOfCycle, isConsistent, needsRest, adaptiveWeekMode, weekM
 const __load = (() => {
 // Load prescription (Framework §8): "find your weight", double progression, increments by load type and age band.
 // Weights are in pounds. Bands use a resistance level (1 = extra light … 5 = extra heavy). Bodyweight progresses by
-// reps, then tempo, then a level-up offer.
+// reps, then a 3-second lowering, then a 1-second pause, then a level-up offer (B6).
 
 const { isSixtyPlus } = __util;
 const DB_STEPS = [2, 3, 5, 8, 10, 12, 15, 17.5, 20, 22.5, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 90, 100];
@@ -533,6 +540,7 @@ const DEFAULTS = {
   'progression.drop_pct': 10,
   'scale_today.load_cut_pct': 10,
   'band.sessions_per_step': 2,
+  'bodyweight.sessions_per_step': 1,
 };
 const set = (settings, k) => (settings && settings[k] != null ? Number(settings[k]) : DEFAULTS[k]);
 
@@ -597,15 +605,19 @@ function findYourWeight({ loadType, weight, rating, muchEasier = false, lower = 
  * Double progression (Framework §8.2). Given the last session on this exercise, suggest the next one.
  * last: { weight, sets: [{reps}], rating: 'easy'|'good'|'hard' }   prevRating: rating the time before (or null)
  * range: { lo, hi }   weekMode: 'build' | 'normal' | 'consolidate' | 'lighter' | 'light' | 'deload'
- * Returns { weight, action: 'find'|'increase'|'hold'|'decrease'|'progress-bodyweight'|'level-up-check', targetReps, note }
+ * measure: 'reps' (default) or 'time' (holds).
+ * Returns { weight, action: 'find'|'increase'|'hold'|'decrease'|'tempo'|'level-up-check'|'level-down-check', targetReps, note,
+ *   stage? (bands and bodyweight) }. 'level-up-check' = she can't add load (equipment ceiling, end of the bodyweight or
+ *   band ladder, or a hold at the top of its range): the in-cycle level-up offer (B6) looks for it.
  */
 function suggestNext({ loadType, last, prevRating = null, older = null, range, ageBand, lower = false, weekMode = 'build',
-  earlyFoundations = false, settings, available }) {
+  earlyFoundations = false, settings, available, measure = 'reps' }) {
   const opts = { lower, ageBand, available };
   if (!last || !last.sets?.length) {
     return { weight: null, action: 'find', targetReps: range.hi, note: 'Find your weight: pick one you could lift about 12–15 times and do 10.' };
   }
   if (loadType === 'band') return bandNext({ last, older, range, weekMode, settings });
+  if (loadType === 'bodyweight' && measure !== 'time') return bodyweightNext({ last, older, prevRating, range, ageBand, weekMode, settings });
   const reps = last.sets.map((s) => Number(s.reps) || 0);
   const w = last.weight;
   const allTop = reps.every((r) => r >= range.hi);
@@ -629,8 +641,8 @@ function suggestNext({ loadType, last, prevRating = null, older = null, range, a
     return { weight: w, action: 'hold', targetReps: repsFirst && allTop ? range.hi + 2 : nextReps,
       note: allTop ? 'Same weight. A couple more reps, then we add weight.' : 'Same weight. Try one more rep per set.' };
   }
-  if (loadType === 'bodyweight') {
-    return { weight: w, action: 'progress-bodyweight', targetReps: range.hi, note: 'Make it harder: lower slowly for 3 seconds, or try the next level.' };
+  if (loadType === 'bodyweight') {   // a hold at the top of its range: the next level is the way on (B6)
+    return { weight: w, action: 'level-up-check', targetReps: range.hi, note: 'You’ve mastered this hold. Ready for the next level?' };
   }
   const extra = set(settings, 'progression.double_jump_extra_reps');
   const twoSteps = last.rating === 'easy' && !earlyFoundations && !isSixtyPlus(ageBand) && reps.every((r) => r >= range.hi + extra);
@@ -679,7 +691,38 @@ function bandNext({ last, older = null, range, weekMode = 'build', settings }) {
   return { weight: up, stage: 0, action: 'increase', targetReps: range.lo, note: 'Next band up, normal speed again. Nice work.' };
 }
 
-/** How each band stage reads in the dose line. */
+/**
+ * Bodyweight reps (Framework §8.3, backlog B6, Amanda packet Q5): reps → 3-second lowering → 1-second pause → the next
+ * level. Stage 0 moves on at the top of the range (+ 2 reps at 60+), the tempo stages at the top of the range, all sets,
+ * rated Good or Easy, in `bodyweight.sessions_per_step` (1) sessions in a row at that stage. At the end of the ladder
+ * the action is 'level-up-check' (the in-cycle offer). Below the range or Hard twice: back to normal speed, then a
+ * level-down check.
+ */
+function bodyweightNext({ last, older = null, prevRating = null, range, ageBand, weekMode = 'build', settings }) {
+  const stage = last.stage ?? 0;
+  const reps = last.sets.map((x) => Number(x.reps) || 0);
+  const nextReps = Math.min(range.hi, Math.max(range.lo, Math.min(...reps) + 1));
+  const out = (o) => ({ weight: null, stage, targetReps: nextReps, ...o });
+  if (reps.some((r) => r < range.lo) || (last.rating === 'hard' && prevRating === 'hard')) {
+    if (stage > 0) return out({ action: 'hold', stage: stage - 1, targetReps: range.lo, note: 'A little easier today: a normal speed for these.' });
+    return out({ action: 'level-down-check', targetReps: range.lo, note: 'Let’s make this one a little easier.' });
+  }
+  if (['consolidate', 'lighter', 'light', 'deload'].includes(weekMode)) return out({ action: 'hold', note: 'Holding steady this week.' });
+  if (last.rating === 'hard') return out({ action: 'hold', note: 'Same again. Aim for smooth reps.' });
+  const target = stage === 0 && isSixtyPlus(ageBand) ? range.hi + 2 : range.hi;
+  const met = (l) => l && (l.stage ?? 0) === stage && (l.rating === 'good' || l.rating === 'easy')
+    && l.sets.length && l.sets.every((x) => (Number(x.reps) || 0) >= target);
+  const need = Math.max(1, set(settings, 'bodyweight.sessions_per_step'));
+  const hits = met(last) ? (need <= 1 || met(older) ? need : 1) : 0;
+  if (hits < need) {
+    return out({ action: 'hold', targetReps: stage === 0 ? Math.min(target, Math.max(range.lo, Math.min(...reps) + 1)) : nextReps,
+      note: stage === 0 ? 'Try one more rep per set.' : BAND_TEMPO[stage] });
+  }
+  if (stage < 2) return out({ action: 'tempo', stage: stage + 1, targetReps: range.lo, note: 'Same exercise, slower now.' });
+  return out({ action: 'level-up-check', note: 'You’ve mastered this one. Ready for the next level?' });
+}
+
+/** How each band and bodyweight stage reads in the dose line. */
 const BAND_TEMPO = ['', 'Lower for 3 seconds on every rep.', 'Lower for 3 seconds and pause for 1 second at the hardest point.'];
 
 /** A load cut by pct (comebacks, §13), rounded down to a weight she can actually load. */
@@ -692,7 +735,7 @@ function reduceLoad(loadType, weight, pct, opts = {}) {
 function scaleTodayWeight(loadType, weight, { settings, ...opts } = {}) {
   return reduceLoad(loadType, weight, set(settings, 'scale_today.load_cut_pct'), opts);
 }
-return { DB_STEPS, KB_STEPS, BAND_LABELS, DEFAULTS, step, roundDownToStep, findYourWeight, suggestNext, bandNext, BAND_TEMPO, reduceLoad, scaleTodayWeight };
+return { DB_STEPS, KB_STEPS, BAND_LABELS, DEFAULTS, step, roundDownToStep, findYourWeight, suggestNext, bandNext, bodyweightNext, BAND_TEMPO, reduceLoad, scaleTodayWeight };
 })();
 
 // ── web/engine/session.js ──
@@ -789,7 +832,8 @@ function firstNote(loadType, range, measure) {
 
 /**
  * Dose and suggested weight for each item.
- * ctx: { week, weekMode, cycleType, ageBand, dumbbells: number[], comeback: comebackMode(), history: {exerciseId: rows},
+ * ctx: { week, weekMode, cycleType, ageBand, dumbbells: number[], comeback: comebackMode() (cutBefore: see cutApplies),
+ *        history: {exerciseId: rows},
  *        settings }
  * Returns items with: dose {sets, reps, rir, time, restSec}, range, measure, weight (suggested; null = she picks),
  * lastWeight, suggestion {action, targetReps, note}.
@@ -805,22 +849,31 @@ function planSession(items, ctx) {
     const range = measure === 'time' && dose.time ? dose.time : dose.reps;
     const { last, prevRating, older } = lastPerformance(history[ex.id], measure);
     const s = suggestNext({
-      loadType: ex.load_type, last, prevRating, older, range, ageBand, weekMode, settings,
+      loadType: ex.load_type, last, prevRating, older, range, ageBand, weekMode, settings, measure,
       lower: LOWER_PATTERNS.has(it.slot.pattern), earlyFoundations: cycleType === 'C1' && week <= 3,
       available: ex.load_type === 'dumbbell' && dumbbells.length ? dumbbells : undefined,
     });
     let weight = s.weight;
     let note = (s.action === 'find' && firstNote(ex.load_type, range, measure)) || s.note;
     if (measure === 'time' && s.action === 'hold') note = 'Same as last time. Try holding a few seconds longer.';
-    if (s.action === 'progress-bodyweight') note = 'Make it harder today: lower slowly for 3 seconds on every rep.';
-    if (comeback && comeback.mode !== 'none' && weight != null) {
+    if (comeback && comeback.mode !== 'none' && weight != null && cutApplies(history[ex.id], comeback)) {
       weight = reduceLoad(ex.load_type, weight, comeback.loadCutPct, { ageBand, available: dumbbells.length ? dumbbells : undefined });
       note = 'Welcome back! A little lighter today so you can ease back in.';
     }
-    const stage = ex.load_type === 'band' ? (s.stage ?? 0) : 0;
+    const stage = ex.load_type === 'band' || ex.load_type === 'bodyweight' ? (s.stage ?? 0) : 0;
     return { ...it, dose, range, measure, weight, last, lastWeight: last?.weight ?? null,
       suggestion: { action: s.action, targetReps: s.targetReps, note, stage, tempo: BAND_TEMPO[stage] || null } };
   });
+}
+
+/**
+ * Comeback load cut for this exercise (§13, B7)? The second lighter session after 14–27 days away cuts only exercises
+ * last done before the first one (comeback.cutBefore), so a weight she already eased back in is not cut twice.
+ */
+function cutApplies(rows, comeback) {
+  if (!comeback?.cutBefore) return true;
+  const lastDate = (rows || []).find((l) => !l.skipped && l.sets?.length)?.created_at?.slice(0, 10);
+  return !lastDate || lastDate < comeback.cutBefore;
 }
 
 /**
@@ -859,7 +912,7 @@ function sessionSummary(exerciseLogs) {
   const done = exerciseLogs.filter((l) => !l.skipped && l.sets?.length);
   return { exercises: done.length, sets: done.reduce((n, l) => n + l.sets.length, 0), skipped: exerciseLogs.length - done.length };
 }
-return { sessionOrder, baseItems, weekStatus, trainedOn, weekWindow, weekModeFor, workingSets, lastPerformance, weightLabel, planSession, seventyPlusCap, applyHold, lastTimeText, swapOptions, sessionSummary };
+return { sessionOrder, baseItems, weekStatus, trainedOn, weekWindow, weekModeFor, workingSets, lastPerformance, weightLabel, planSession, cutApplies, seventyPlusCap, applyHold, lastTimeText, swapOptions, sessionSummary };
 })();
 
 // ── web/engine/progress.js ──

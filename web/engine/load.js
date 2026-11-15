@@ -1,6 +1,6 @@
 // Load prescription (Framework §8): "find your weight", double progression, increments by load type and age band.
 // Weights are in pounds. Bands use a resistance level (1 = extra light … 5 = extra heavy). Bodyweight progresses by
-// reps, then tempo, then a level-up offer.
+// reps, then a 3-second lowering, then a 1-second pause, then a level-up offer (B6).
 
 import { isSixtyPlus } from './util.js';
 
@@ -14,6 +14,7 @@ export const DEFAULTS = {
   'progression.drop_pct': 10,
   'scale_today.load_cut_pct': 10,
   'band.sessions_per_step': 2,
+  'bodyweight.sessions_per_step': 1,
 };
 const set = (settings, k) => (settings && settings[k] != null ? Number(settings[k]) : DEFAULTS[k]);
 
@@ -78,15 +79,19 @@ export function findYourWeight({ loadType, weight, rating, muchEasier = false, l
  * Double progression (Framework §8.2). Given the last session on this exercise, suggest the next one.
  * last: { weight, sets: [{reps}], rating: 'easy'|'good'|'hard' }   prevRating: rating the time before (or null)
  * range: { lo, hi }   weekMode: 'build' | 'normal' | 'consolidate' | 'lighter' | 'light' | 'deload'
- * Returns { weight, action: 'find'|'increase'|'hold'|'decrease'|'progress-bodyweight'|'level-up-check', targetReps, note }
+ * measure: 'reps' (default) or 'time' (holds).
+ * Returns { weight, action: 'find'|'increase'|'hold'|'decrease'|'tempo'|'level-up-check'|'level-down-check', targetReps, note,
+ *   stage? (bands and bodyweight) }. 'level-up-check' = she can't add load (equipment ceiling, end of the bodyweight or
+ *   band ladder, or a hold at the top of its range): the in-cycle level-up offer (B6) looks for it.
  */
 export function suggestNext({ loadType, last, prevRating = null, older = null, range, ageBand, lower = false, weekMode = 'build',
-  earlyFoundations = false, settings, available }) {
+  earlyFoundations = false, settings, available, measure = 'reps' }) {
   const opts = { lower, ageBand, available };
   if (!last || !last.sets?.length) {
     return { weight: null, action: 'find', targetReps: range.hi, note: 'Find your weight: pick one you could lift about 12–15 times and do 10.' };
   }
   if (loadType === 'band') return bandNext({ last, older, range, weekMode, settings });
+  if (loadType === 'bodyweight' && measure !== 'time') return bodyweightNext({ last, older, prevRating, range, ageBand, weekMode, settings });
   const reps = last.sets.map((s) => Number(s.reps) || 0);
   const w = last.weight;
   const allTop = reps.every((r) => r >= range.hi);
@@ -110,8 +115,8 @@ export function suggestNext({ loadType, last, prevRating = null, older = null, r
     return { weight: w, action: 'hold', targetReps: repsFirst && allTop ? range.hi + 2 : nextReps,
       note: allTop ? 'Same weight. A couple more reps, then we add weight.' : 'Same weight. Try one more rep per set.' };
   }
-  if (loadType === 'bodyweight') {
-    return { weight: w, action: 'progress-bodyweight', targetReps: range.hi, note: 'Make it harder: lower slowly for 3 seconds, or try the next level.' };
+  if (loadType === 'bodyweight') {   // a hold at the top of its range: the next level is the way on (B6)
+    return { weight: w, action: 'level-up-check', targetReps: range.hi, note: 'You’ve mastered this hold. Ready for the next level?' };
   }
   const extra = set(settings, 'progression.double_jump_extra_reps');
   const twoSteps = last.rating === 'easy' && !earlyFoundations && !isSixtyPlus(ageBand) && reps.every((r) => r >= range.hi + extra);
@@ -160,7 +165,38 @@ export function bandNext({ last, older = null, range, weekMode = 'build', settin
   return { weight: up, stage: 0, action: 'increase', targetReps: range.lo, note: 'Next band up, normal speed again. Nice work.' };
 }
 
-/** How each band stage reads in the dose line. */
+/**
+ * Bodyweight reps (Framework §8.3, backlog B6, Amanda packet Q5): reps → 3-second lowering → 1-second pause → the next
+ * level. Stage 0 moves on at the top of the range (+ 2 reps at 60+), the tempo stages at the top of the range, all sets,
+ * rated Good or Easy, in `bodyweight.sessions_per_step` (1) sessions in a row at that stage. At the end of the ladder
+ * the action is 'level-up-check' (the in-cycle offer). Below the range or Hard twice: back to normal speed, then a
+ * level-down check.
+ */
+export function bodyweightNext({ last, older = null, prevRating = null, range, ageBand, weekMode = 'build', settings }) {
+  const stage = last.stage ?? 0;
+  const reps = last.sets.map((x) => Number(x.reps) || 0);
+  const nextReps = Math.min(range.hi, Math.max(range.lo, Math.min(...reps) + 1));
+  const out = (o) => ({ weight: null, stage, targetReps: nextReps, ...o });
+  if (reps.some((r) => r < range.lo) || (last.rating === 'hard' && prevRating === 'hard')) {
+    if (stage > 0) return out({ action: 'hold', stage: stage - 1, targetReps: range.lo, note: 'A little easier today: a normal speed for these.' });
+    return out({ action: 'level-down-check', targetReps: range.lo, note: 'Let’s make this one a little easier.' });
+  }
+  if (['consolidate', 'lighter', 'light', 'deload'].includes(weekMode)) return out({ action: 'hold', note: 'Holding steady this week.' });
+  if (last.rating === 'hard') return out({ action: 'hold', note: 'Same again. Aim for smooth reps.' });
+  const target = stage === 0 && isSixtyPlus(ageBand) ? range.hi + 2 : range.hi;
+  const met = (l) => l && (l.stage ?? 0) === stage && (l.rating === 'good' || l.rating === 'easy')
+    && l.sets.length && l.sets.every((x) => (Number(x.reps) || 0) >= target);
+  const need = Math.max(1, set(settings, 'bodyweight.sessions_per_step'));
+  const hits = met(last) ? (need <= 1 || met(older) ? need : 1) : 0;
+  if (hits < need) {
+    return out({ action: 'hold', targetReps: stage === 0 ? Math.min(target, Math.max(range.lo, Math.min(...reps) + 1)) : nextReps,
+      note: stage === 0 ? 'Try one more rep per set.' : BAND_TEMPO[stage] });
+  }
+  if (stage < 2) return out({ action: 'tempo', stage: stage + 1, targetReps: range.lo, note: 'Same exercise, slower now.' });
+  return out({ action: 'level-up-check', note: 'You’ve mastered this one. Ready for the next level?' });
+}
+
+/** How each band and bodyweight stage reads in the dose line. */
 export const BAND_TEMPO = ['', 'Lower for 3 seconds on every rep.', 'Lower for 3 seconds and pause for 1 second at the hardest point.'];
 
 /** A load cut by pct (comebacks, §13), rounded down to a weight she can actually load. */

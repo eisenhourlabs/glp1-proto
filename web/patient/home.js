@@ -3,12 +3,14 @@
 import { h, clear } from '../shared/dom.js';
 import { primary, secondary, choices } from '../shared/ui.js';
 import { weekOfCycle, weekModeMessage } from '../engine/cycle.js';
-import { comebackMode } from '../engine/adherence.js';
+import { restartDue } from '../engine/adherence.js';
+import { standingAreas } from '../engine/readiness.js';
+import { weeklyCounts, streaks } from '../engine/progress.js';
 import { sessionOrder, weekStatus, trainedOn, weekWindow, weekModeFor } from '../engine/session.js';
 import { swapNote } from '../engine/resolve.js';
 import { activeAdjustments, extraSetsAllowed } from '../engine/checkin.js';
-import { loadContent, localToday } from './api.js';
-import { loadSettings, loadWarmups, cycleLogs, lastWorkout, flagsSince, startSession, sessionExerciseLogs, finishSession,
+import { loadContent, localToday, restartCycle } from './api.js';
+import { loadSettings, loadWarmups, cycleLogs, recentWorkouts, standingInputs, addAdjustment, flagsSince, startSession, sessionExerciseLogs, finishSession,
   discardSession, saveWeekMode, updateCycleStart, cycleAdjustments, skipToday, cycleProposal } from './log_api.js';
 import { makePlanner, warmupFor, renderReadiness } from './today.js';
 import { runWorkout } from './workout.js';
@@ -20,7 +22,8 @@ import { openSheet } from './workout_parts.js';
 import { SKIP_OPTIONS } from './session_copy.js';
 import { renderReview } from './review.js';
 import { addDays } from '../engine/util.js';
-import { homeState, comebackFrom, restDaySuggested } from '../engine/home_state.js';
+import { homeState, comebackFor, restDaySuggested } from '../engine/home_state.js';
+import { findOffer, offerCard } from './offers_ui.js';
 
 const GOALS = {
   keep_muscle: 'Keep my muscle while I lose weight', everyday_strength: 'Make everyday life easier',
@@ -47,20 +50,33 @@ export async function renderHome(root, { patient, cycle, reload }) {
     decision = weekModeFor({ week, cycle, logs, daysPerWeek: template.days_per_week, flagCount, settings });
     if (!decision.stored) await saveWeekMode(cycle, week, decision).catch(console.error);
   }
-  const active = activeAdjustments({ adjustments: await cycleAdjustments(cycle.id), logs, week });
+  const adjustments = await cycleAdjustments(cycle.id);
+  cycle.restart = adjustments.find((a) => a.type === 'comeback_restart')?.detail ?? null;
+  const active = activeAdjustments({ adjustments, logs, week });
   const lighterByCheckin = active.lighterWeek && decision.mode === 'build';
   const weekMode = lighterByCheckin ? 'lighter' : decision.mode;
-  const last = await lastWorkout(patient.id);
-  const comeback = comebackMode(comebackFrom(last, cycle), today, settings);
+  const [recent, standingIn] = await Promise.all([recentWorkouts(patient.id), standingInputs(patient.id)]);
+  const last = recent[0] ?? null;
+  const comeback = comebackFor(recent, cycle, today, settings);
+  const standing = standingAreas(standingIn.pain, standingIn.clears);
   const inProgress = logs.find((l) => l.status === 'in_progress' && l.log_date === today);
   const lastDone = [...logs].reverse().find((l) => DONE.has(l.status));
-  const env = { patient, cycle, content, settings, week, weekMode, comeback, holdAndTrim: active.holdAndTrim,
+  const env = { patient, cycle, content, settings, week, weekMode, comeback, standing, capNo: cycle.restart?.cap_no ?? cycle.cycle_no,
+    holdAndTrim: active.holdAndTrim,
     extraSets: active.extraSets && !active.holdAndTrim && extraSetsAllowed(weekMode) };
   const rerender = async () => { clear(root); await renderHome(root, { patient, cycle, reload }); window.scrollTo?.(0, 0); };
 
   // ── Cycle review (week 9 on, Framework §14) ──
   const reviewOpen = rawWeek >= 9;
   const proposal = reviewOpen ? await cycleProposal(cycle.id).catch(() => null) : null;
+
+  // ── Back after 28+ days inside the cycle (§13, B7): restart this cycle type at week 1 ──
+  const doneWeeks = logs.filter((l) => DONE.has(l.status)).map((l) => l.week);
+  if (restartDue({ mode: comeback.mode, rawWeek, lastWeekInCycle: doneWeeks.length ? Math.max(...doneWeeks) : null, proposalReady: Boolean(proposal) })) {
+    const best = streaks(weeklyCounts(logs, week, template.days_per_week), week).best;
+    await restartCycle(patient, cycle, { bestStreak: Math.max(best, cycle.restart?.best_streak ?? 0), fromWeek: week });
+    return reload ? reload() : window.location.reload();
+  }
   const showReview = () => {
     clear(root);
     renderReview(root, { patient, cycle, template, content, canStart: rawWeek >= 10 || status.complete,
@@ -71,7 +87,11 @@ export async function renderHome(root, { patient, cycle, reload }) {
   // ── Workout flow ──
   const begin = (session) => {
     clear(root);
-    renderReadiness(root, { sessionName: names[session], onBack: rerender, onStart: (answers) => start(session, answers).catch(fail) });
+    renderReadiness(root, { sessionName: names[session], onBack: rerender, onStart: (answers) => start(session, answers).catch(fail),
+      standing: [...env.standing], onBetter: async (area) => {
+        await addAdjustment(patient.id, cycle.id, { type: 'workaround_cleared', reason: 'feeling_better', detail: { area } });
+        env.standing = env.standing.filter((a) => a !== area);
+      } });
   };
   const start = async (session, answers) => {
     const todayAns = { ...answers, soreAreas: lastDone?.sore_areas || [] };
@@ -91,14 +111,17 @@ export async function renderHome(root, { patient, cycle, reload }) {
     clear(root);
     const warmup = warmupFor(await loadWarmups(content.version), patient);
     runWorkout(root, { patient, cycle, sessionLog: log, sessionName: names[session], items, warmup, existing, planner, today: todayAns,
-      onFinish: (r) => finishScreen({ ...r, log }, session) });
+      onFinish: (r) => finishScreen({ ...r, log, slots: planner.cycleSlots }, session) });
   };
   const finishScreen = (r, session) => {
     clear(root);
     if (r.ended) return rerender();
-    renderCheckin(root, { patient, cycle, log: r.log, week, perWeek: template.days_per_week, settings, onDone: ({ messages }) => {
+    renderCheckin(root, { patient, cycle, log: r.log, week, perWeek: template.days_per_week, settings, onDone: async ({ messages }) => {
+      // In-cycle level-up offer (B6): only from week 4, never on a day she worked around pain.
+      const offer = r.states ? await findOffer(env, r.states, r.slots).catch((e) => { console.error(e); return null; }) : null;
       clear(root);
-      renderReward(root, { patient, cycle, week, perWeek: template.days_per_week, status: r.status, messages, onHome: rerender, onProgress: showProgress })
+      renderReward(root, { patient, cycle, week, perWeek: template.days_per_week, status: r.status, messages, onHome: rerender, onProgress: showProgress,
+        offerCard: offer ? offerCard(offer, { patient, cycle }) : null, carriedBest: cycle.restart?.best_streak ?? 0 })
         .catch(fail);
       window.scrollTo?.(0, 0);
     } });
@@ -120,7 +143,7 @@ export async function renderHome(root, { patient, cycle, reload }) {
   };
   const showProgress = () => {
     clear(root);
-    renderProgress(root, { patient, cycle, template, week, library: content.library, onBack: rerender }).catch(fail);
+    renderProgress(root, { patient, cycle, template, week, library: content.library, carriedBest: cycle.restart?.best_streak ?? 0, onBack: rerender }).catch(fail);
     window.scrollTo?.(0, 0);
   };
 
@@ -132,7 +155,8 @@ export async function renderHome(root, { patient, cycle, reload }) {
     h('h1', {}, rawWeek < 1 ? 'Your program' : state.complete ? 'Cycle complete' : 'This week'),
     patient.goal ? h('p', { class: 'goal' }, `Your goal: ${GOALS[patient.goal] ?? patient.goal}`, patient.goal_words ? ` · “${patient.goal_words}”` : '') : null);
   const notes = noticeContent(state, {
-    startsOn: prettyDate(cycle.start_date), nextNo: cycle.cycle_no + 1, rawWeek, comeback: comeback.mode, weekMode: decision.mode, lighterByCheckin,
+    startsOn: prettyDate(cycle.start_date), nextNo: cycle.cycle_no + 1, rawWeek, comeback: comeback.second ? 'reentry_second' : comeback.mode,
+    weekMode: decision.mode, lighterByCheckin,
     startToday: async () => { await updateCycleStart(cycle, today); rerender(); }, showReview,
   });
   if (notes.length) hero.append(h('div', { class: 'card soft', 'data-notice': state.notice }, ...notes));

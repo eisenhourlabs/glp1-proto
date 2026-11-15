@@ -42,6 +42,40 @@ test('gaps: a missed week is a welcome back, five weeks away is a restart, waiti
   assert.equal(firstOfCycle2.comeback, 'none');
 });
 
+test('B7: five weeks away mid-cycle restarts the same cycle type at week 1 with the same exercises', () => {
+  const lisa = runPersona(personas.find((p) => p.key === 'lisa'), content, { weeks: 20 });
+  const restart = lisa.cycles.find((c) => c.restart);
+  assert.ok(restart, 'a restart cycle');
+  const before = lisa.cycles[lisa.cycles.indexOf(restart) - 1];
+  assert.equal(restart.type, before.type);
+  assert.equal(before.review, undefined, 'no review for the abandoned cycle');
+  assert.equal(restart.template.id, before.template.id, 'same template; the exercises carry over (with any accepted level-ups)');
+  const first = lisa.weeks.find((w) => w.cycle === restart.no && w.sessions?.length);
+  assert.equal(first.cw, 1);
+});
+
+test('B7: 14–27 days away gives two lighter sessions; a pain report is a standing work-around until "Feeling better"', () => {
+  const maria = runPersona(personas.find((p) => p.key === 'maria'), content, { weeks: 30 });
+  const s = maria.weeks.flatMap((w) => w.sessions || []).filter((x) => x.comeback === 'reentry');
+  assert.deepEqual(s.map((x) => x.second), [false, true]);
+  const beth = runPersona(personas.find((p) => p.key === 'beth'), content, { weeks: 8 });
+  const byWeek = (g) => beth.weeks.find((w) => w.g === g).sessions;
+  assert.deepEqual(byWeek(4)[0].standing, ['knees'], 'after the week-3 pain report');
+  assert.deepEqual(byWeek(6)[0].standing, [], 'Feeling better in week 6');
+  assert.ok(byWeek(5).every((x) => x.lines.every((l) => (l.exercise.area_load?.knees ?? 0) <= 1)));
+});
+
+test('B6: offers from week 4, accepted ones apply, "Not yet" waits 2 weeks', () => {
+  const dana = runPersona(personas.find((p) => p.key === 'dana'), content, { weeks: 9 });
+  assert.ok(dana.levelUps.length > 0);
+  assert.ok(dana.levelUps.every((u) => u.week >= 4));
+  assert.equal(dana.levelUps[0].week, 4, 'Dana gets her first offer in week 4');
+  assert.ok(dana.levelUps.every((u) => u.outcome === 'accepted'));
+  const mike = runPersona(personas.find((p) => p.key === 'mike'), content, { weeks: 30 });
+  assert.ok(mike.levelUps.length > 0 && mike.levelUps.every((u) => u.outcome === 'declined'));
+  assert.deepEqual(mike.violations, []);
+});
+
 test('equipment change applies from the next cycle', () => {
   const tanya = runPersona(personas.find((p) => p.key === 'tanya'), content, { weeks: 13 });
   assert.equal(tanya.cycles[0].setup, 'minimal_home');

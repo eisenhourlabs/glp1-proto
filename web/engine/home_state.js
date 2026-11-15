@@ -3,6 +3,7 @@
 // Also the cycle label ("Week 3 of 9" / "Cycle complete") and the gap a comeback is measured over.
 
 import { addDays, daysBetween, isSixtyPlus } from './util.js';
+import { comebackMode } from './adherence.js';
 
 export const CYCLE_WEEKS = 9;
 const CYCLE_DAYS = CYCLE_WEEKS * 7;
@@ -24,15 +25,26 @@ export function cycleLabel(rawWeek, weekComplete) {
  * cycle ended and before the next one started, i.e. waiting on the review) are not a gap, so the last
  * workout date is moved forward by that many days.
  * last: { date, cycleStart } of her last completed workout (cycleStart = start date of the cycle it was in), or null.
- * current: { start_date } of the active cycle.
+ * current: { start_date, restart? } of the active cycle (restart: it restarted after 28+ days away, B7).
  */
 export function comebackFrom(last, current) {
   if (!last?.date) return null;
+  if (current?.restart) return last.date;   // a restarted cycle (B7): the time away is the gap, not a wait for the review
   if (!last.cycleStart || !current?.start_date || last.cycleStart === current.start_date) return last.date;
   const ended = addDays(last.cycleStart, CYCLE_DAYS);
   const idleFrom = last.date > ended ? last.date : ended;
   const idle = Math.max(0, daysBetween(idleFrom, current.start_date));
   return addDays(last.date, idle);
+}
+
+/**
+ * Today's comeback (§13, B7) from her last two completed workouts (newest first, each { date, cycleStart }), measured
+ * without the days spent waiting between cycles; the earlier gap makes the second of two lighter sessions.
+ */
+export function comebackFor(recent, current, today, settings) {
+  const [last, prev] = recent || [];
+  const prior = last && prev ? { gap: daysBetween(comebackFrom(prev, { start_date: last.cycleStart }), last.date), date: last.date } : null;
+  return comebackMode(comebackFrom(last, current), today, settings, prior);
 }
 
 /**

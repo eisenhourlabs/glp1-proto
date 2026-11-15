@@ -25,13 +25,24 @@ export async function loadWarmups(version) {
 export const cycleLogs = async (cycleId) =>
   must(await db.from('session_logs').select('*').eq('cycle_id', cycleId).order('log_date', { ascending: true }).order('id'));
 
-/** Her last completed workout (any cycle): { date, cycleStart } (start date of the cycle it was in), or null. */
-export async function lastWorkout(uid) {
+/** Her last `n` completed workouts (any cycle), newest first: [{ date, cycleStart }] (cycleStart = start of its cycle). */
+export async function recentWorkouts(uid, n = 2) {
   const rows = must(await db.from('session_logs').select('log_date,cycle_id').eq('patient_id', uid).in('status', ['done', 'partial'])
-    .order('log_date', { ascending: false }).limit(1));
-  if (!rows[0]) return null;
-  const cyc = must(await db.from('cycles').select('start_date').eq('id', rows[0].cycle_id).maybeSingle());
-  return { date: rows[0].log_date, cycleStart: cyc?.start_date ?? null };
+    .order('log_date', { ascending: false }).limit(n));
+  if (!rows.length) return [];
+  const ids = [...new Set(rows.map((r) => r.cycle_id))];
+  const cycles = must(await db.from('cycles').select('id,start_date').in('id', ids));
+  const start = Object.fromEntries(cycles.map((c) => [c.id, c.start_date]));
+  return rows.map((r) => ({ date: r.log_date, cycleStart: start[r.cycle_id] ?? null }));
+}
+
+/** Pain reports (any time) and "Feeling better" taps: what standingAreas() needs (B7). */
+export async function standingInputs(uid) {
+  const [pain, clears] = await Promise.all([
+    db.from('flags').select('type,detail,created_at').eq('patient_id', uid).eq('type', 'pain').then(must),
+    db.from('adjustments').select('type,detail,created_at').eq('patient_id', uid).eq('type', 'workaround_cleared').then(must),
+  ]);
+  return { pain, clears };
 }
 
 export const flagsSince = async (uid, fromIso) =>

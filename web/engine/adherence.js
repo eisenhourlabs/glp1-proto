@@ -34,16 +34,37 @@ export function bestStreak(sessions) {
 }
 
 /**
- * Comeback mode from the gap since her last completed session (§13).
- * @returns {{mode: 'none'|'welcome_back'|'reentry'|'restart', setDelta: number, loadCutPct: number, sessions: number}}
+ * Comeback mode from the gap since her last completed session (§13, backlog B7, Amanda packet Q9).
+ *   8–13 days: one welcome-back session (−1 set, loads −10%).
+ *   14–27 days: two lighter sessions (−1 set, loads −15%). prior = { gap, date }: the gap before her last workout and
+ *     that workout's date. When that gap was 14–27 days, today is the second lighter session; its load cut only
+ *     applies to exercises last done before `date` (cutBefore; see session.js cutApplies).
+ *   28+ days: restart (loads −20%; the app restarts the cycle at week 1, see restartDue).
+ * @returns {{mode: 'none'|'welcome_back'|'reentry'|'restart', setDelta: number, loadCutPct: number, sessions: number,
+ *            second?: true, cutBefore?: string}}
  */
-export function comebackMode(lastSessionDate, today, settings) {
-  if (!lastSessionDate) return { mode: 'none', setDelta: 0, loadCutPct: 0, sessions: 0 };
+export function comebackMode(lastSessionDate, today, settings, prior = null) {
+  const none = { mode: 'none', setDelta: 0, loadCutPct: 0, sessions: 0 };
+  if (!lastSessionDate) return none;
   const gap = daysBetween(lastSessionDate, today);
   if (gap >= cfg(settings, 'comeback.restart_days')) return { mode: 'restart', setDelta: 0, loadCutPct: 20, sessions: 0 };
   if (gap >= cfg(settings, 'comeback.reentry_days')) return { mode: 'reentry', setDelta: -1, loadCutPct: 15, sessions: 2 };
   if (gap >= cfg(settings, 'comeback.welcome_back_days')) return { mode: 'welcome_back', setDelta: -1, loadCutPct: 10, sessions: 1 };
-  return { mode: 'none', setDelta: 0, loadCutPct: 0, sessions: 0 };
+  if (prior?.gap != null && prior.gap >= cfg(settings, 'comeback.reentry_days') && prior.gap < cfg(settings, 'comeback.restart_days')) {
+    return { mode: 'reentry', setDelta: -1, loadCutPct: 15, sessions: 2, second: true, cutBefore: prior.date ?? lastSessionDate };
+  }
+  return none;
+}
+
+/**
+ * Restart the cycle at week 1 (§13 28+ days, B7)? Only for a restart-length gap that began inside the cycle's training
+ * weeks (her last workout in this cycle was before week 9, or she hasn't trained in it yet), from week 2 on, and not
+ * once the cycle's review plan exists. A gap after week 9 goes to the review as usual; the new cycle starts lighter.
+ * lastWeekInCycle: the latest week she completed a workout in this cycle, or null.
+ */
+export function restartDue({ mode, rawWeek, lastWeekInCycle = null, proposalReady = false }) {
+  if (mode !== 'restart' || proposalReady || rawWeek < 2) return false;
+  return lastWeekInCycle == null || lastWeekInCycle < 9;
 }
 
 /** Clinic "worth a check-in call" flag: no completed workout in 7 days (enrolled, past her start date). */

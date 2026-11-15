@@ -27,20 +27,6 @@ export function startingCycle({ experience, check = {} } = {}) {
 }
 
 /**
- * Offer the next level for a pattern (§5.3)? recent: last sessions on that pattern's exercise, newest last,
- * each { allTop: boolean, rating }. Offer when 2 of the last 3 hit the top of the range rated good/easy at the
- * heaviest load she has (atCeiling), or when she finished a cycle at this level progressing with no flags.
- */
-export function shouldOfferLevelUp({ level, recent = [], atCeiling = false, cleanCycleAtLevel = false, maxLevel = 4,
-  cycleType = null, week = null }) {
-  if (level >= maxLevel) return false;
-  if (cycleType === 'C1' && week != null && week < 3) return false;   // Foundations weeks 1–2 are technique weeks
-  const last3 = recent.slice(-3);
-  const good = last3.filter((r) => r.allTop && (r.rating === 'good' || r.rating === 'easy')).length;
-  return (atCeiling && good >= 2) || cleanCycleAtLevel;
-}
-
-/**
  * Drop a level for a pattern (§5.3, automatic and reversible): "too hard" with missed reps at the lowest load for
  * 2 sessions, or 2+ work-around/pain flags on the pattern within 14 days.
  */

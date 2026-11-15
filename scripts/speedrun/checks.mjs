@@ -27,9 +27,11 @@ export const RULES = {
   level_ceiling: 'A level-up above her setup or library ceiling (§5.3, B1)',
   extra_set: 'An extra set outside a secondary slot (§12, B8)',
   balance_60: 'A full 60+ week with fewer than 2 workouts containing balance (§4, B4)',
+  offer_early: 'An in-cycle level-up offer before week 4 of a cycle (§5.3, B6)',
+  offer_repeat: 'A level-up offer repeated within 14 days of "Not yet" (§5.3, B6)',
 };
 export const WATCH = {
-  levelup_not_applied: 'Level-up earned but never applied (B1, B6)',
+  levelup_not_applied: 'Level-up earned but never applied (B1, B6; offers are now made and applied, so this stays 0)',
   level1_repeat: 'Same level-1 exercise twice in a week (B5, Amanda Q5)',
   band_flip: 'Band goes up then straight back down (B3)',
   too_easy_no_extra_sets: 'A "too easy" week did not add sets (B8)',

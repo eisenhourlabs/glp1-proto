@@ -4,14 +4,15 @@
 // engine calls the patient app makes, in the same order (web/patient/home.js, today.js, checkin.js, api.js).
 // Pure: content and personas in, a result object out. The CLI (scripts/speedrun.mjs) writes the reports.
 
-import { startingLevels, startingCycle, shouldOfferLevelUp } from '../../web/engine/levels.js';
+import { startingLevels, startingCycle } from '../../web/engine/levels.js';
+import { levelUpOffers, OFFER_DEFAULTS } from '../../web/engine/offers.js';
 import { chooseTemplate, materializeCycle, weekOfCycle, weekModeMessage } from '../../web/engine/cycle.js';
 import { findYourWeight, roundDownToStep, BAND_LABELS } from '../../web/engine/load.js';
 import { swapNote } from '../../web/engine/resolve.js';
-import { comebackMode } from '../../web/engine/adherence.js';
-import { comebackFrom } from '../../web/engine/home_state.js';
+import { restartDue } from '../../web/engine/adherence.js';
+import { comebackFor } from '../../web/engine/home_state.js';
 import { planSession, applyHold, weekModeFor, weekWindow } from '../../web/engine/session.js';
-import { applyWorkarounds, applySoreness, scaleToday } from '../../web/engine/readiness.js';
+import { applyWorkarounds, applySoreness, scaleToday, standingAreas } from '../../web/engine/readiness.js';
 import { checkinActions, activeAdjustments, applyHoldAndTrim, primariesProgressing, extraSetSlots, applyExtraSets, extraSetsAllowed } from '../../web/engine/checkin.js';
 import { cycleSummary, defaultProposal, applyLevelChanges, slotsWithSwaps, levelCeilings } from '../../web/engine/review.js';
 import { validateProposal } from '../../web/engine/review_validate.js';
@@ -52,20 +53,23 @@ export function runPersona(p, content, { weeks = 30 } = {}) {
     restrictions: patient.restrictions, floorOk: patient.floor_ok });
 
   const out = { persona: p, cycles: [], weeks: [], levelUps: [], violations: [], watch: [], notes: [] };
-  const cap = new Map(); const hist = {}; const recent = {};
-  const allLogs = []; const allExLogs = []; const flags = [];
+  const cap = new Map(); const hist = {};
+  const allLogs = []; const allExLogs = []; const flags = []; const clears = [];
+  const lib = Object.fromEntries(library.map((e) => [e.id, e]));
   let logId = 0; let curG = 1; let weekRows = []; let cycle = null; let cycleLogs = []; let cycleExLogs = []; let adjustments = []; let prevSore = [];
 
-  const startCycle = (type, start, { avoid = [], swaps = [], days = p.days } = {}) => {
+  const startCycle = (type, start, { avoid = [], swaps = [], days = p.days, restartOf = null } = {}) => {
     const perWeek = type === 'C1' && days === 4 ? 3 : days;
-    const template = chooseTemplate(templates, { cycleType: type, daysPerWeek: perWeek, experienced: type !== 'C1' });
+    const template = restartOf?.template ?? chooseTemplate(templates, { cycleType: type, daysPerWeek: perWeek, experienced: type !== 'C1' });
     if (!template) throw new Error(`${p.key}: no template for ${type} at ${perWeek} days`);
     const own = slotsWithSwaps(slots.filter((s) => s.template_id === template.template_id), swaps);
-    const plan = materializeCycle(template, own, profileOf(), library, { minutes: p.minutes, used: avoid, ageBand: p.age_band, settings });
-    cycle = { cycle_no: (cycle?.cycle_no ?? 0) + 1, cycle_type: type, template_id: template.template_id, start_date: start,
+    // A restart (§13, B7) keeps the same exercises; otherwise the plan is built fresh.
+    const plan = restartOf ? { ...restartOf.plan, sessions: restartOf.plan.sessions.map((x) => ({ ...x, items: x.items.map((i) => ({ ...i })) })) }
+      : materializeCycle(template, own, profileOf(), library, { minutes: p.minutes, used: avoid, ageBand: p.age_band, settings });
+    cycle = { cycle_no: (cycle?.cycle_no ?? 0) + 1, capNo: restartOf ? restartOf.capNo : (cycle?.cycle_no ?? 0) + 1, restart: Boolean(restartOf), cycle_type: type, template_id: template.template_id, start_date: start,
       session_minutes: p.minutes, week_modes: {}, template, plan, levels: { ...patient.pattern_levels },
       equipment: [...patient.equipment], dumbbells: [...me.dumbbells] };
-    out.cycles.push({ no: cycle.cycle_no, type, template: { id: template.template_id, name: template.name }, start, levels: cycle.levels,
+    out.cycles.push({ no: cycle.cycle_no, type, restart: cycle.restart, template: { id: template.template_id, name: template.name }, start, levels: cycle.levels,
       setup: patient.setup, skipped: plan.skipped,
       plan: plan.sessions.map((s) => ({ session: s.session, name: s.name, items: s.items.map((it) => ({
         slot: it.slot.slot, role: it.slot.role, pattern: it.slot.pattern, id: it.exercise?.id ?? null, name: it.exercise?.name ?? null,
@@ -85,12 +89,6 @@ export function runPersona(p, content, { weeks = 30 } = {}) {
       level_changes: proposal.level_changes, ceilings, swaps: proposal.swaps, recap: proposal.recap, validation };
     out.violations.push(...reviewChecks(validation, { cycle: cycle.cycle_no, date }, { proposal, levels: patient.pattern_levels, ceilings }));
     out.watch.push(...reviewWatch(validation, { cycle: cycle.cycle_no, date }));
-    const earned = out.levelUps.filter((l) => l.cycle === cycle.cycle_no);
-    const applied = new Set(proposal.level_changes.filter((c) => c.change > 0).map((c) => c.pattern));
-    for (const pattern of new Set(earned.map((l) => l.pattern))) {
-      if (!applied.has(pattern)) out.watch.push({ rule: 'levelup_not_applied', cycle: cycle.cycle_no, date,
-        detail: `${pattern} level-up earned in cycle ${cycle.cycle_no} but the review keeps level ${patient.pattern_levels[pattern]}` });
-    }
     patient.pattern_levels = applyLevelChanges(patient.pattern_levels, proposal.level_changes);
     patient.setup = me.setup; patient.equipment = equipFor(me.setup); patient.dumbbells_available = [...me.dumbbells];
     const avoid = proposal.cycle_type === cycle.cycle_type ? cycle.plan.sessions.flatMap((s) => s.items.map((i) => i.exercise?.id)).filter(Boolean) : [];
@@ -110,6 +108,12 @@ export function runPersona(p, content, { weeks = 30 } = {}) {
     }
     const script = weekScript(p, g);
     let cw = weekOfCycle(cycle.start_date, weekStart);
+    if (script.length && restartDue({ mode: comebackNow(weekStart).mode, rawWeek: cw,
+      lastWeekInCycle: cycleLogs.length ? Math.max(...cycleLogs.map((l) => l.week)) : null })) {
+      out.notes.push({ week: g, text: `Back after 28+ days in cycle week ${Math.min(cw, 9)}: cycle ${cycle.cycle_type} restarts at week 1 with the same exercises and levels.` });
+      startCycle(cycle.cycle_type, weekStart, { restartOf: cycle });
+      cw = 1;
+    }
     if (cw > 9) {
       if (!script.length) { out.weeks.push({ g, waiting: true, cycle: cycle.cycle_no, sessions: [] }); continue; }
       review(weekStart);
@@ -135,23 +139,31 @@ export function runPersona(p, content, { weeks = 30 } = {}) {
   out.final = { levels: patient.pattern_levels, cycle: cycle.cycle_no, type: cycle.cycle_type, workouts: allLogs.length };
   return out;
 
+  // The comeback for a workout on `date` (§13, B7): the same call the home screen makes.
+  function comebackNow(date) {
+    const at = (l) => l && { date: l.log_date, cycleStart: l.cycleStart };
+    return comebackFor([at(allLogs[allLogs.length - 1]), at(allLogs[allLogs.length - 2])].filter(Boolean), cycle, date, settings);
+  }
+
   function session(s, cw, mode, date) {
     const last = allLogs.length ? { date: allLogs[allLogs.length - 1].log_date, cycleStart: allLogs[allLogs.length - 1].cycleStart } : null;
-    const comeback = comebackMode(comebackFrom(last, cycle), date, settings);
+    if (s.better) clears.push({ type: 'workaround_cleared', detail: { area: s.better }, created_at: `${date}T06:00:00Z` });
+    const standing = standingAreas(flags.filter((f) => f.type === 'pain'), clears);
+    const comeback = comebackNow(date);
     const gapDays = last && last.cycleStart === cycle.start_date ? daysBetween(last.date, date) : null;
     const active = activeAdjustments({ adjustments, logs: cycleLogs, week: cw });
     const lighterByCheckin = active.lighterWeek && mode === 'build';
     const weekMode = lighterByCheckin ? 'lighter' : mode;
     const sessPlan = cycle.plan.sessions.find((x) => x.session === s.letter);
     let items = sessPlan.items.filter((it) => it.exercise);
-    const areas = [...new Set([...(s.areas || []), ...(s.pain ? [s.pain] : [])])];
+    const areas = [...new Set([...(s.areas || []), ...(s.pain ? [s.pain] : []), ...standing])];
     const profile = profileOf();
     const swaps = [];
     if (areas.length) {
       const r = applyWorkarounds(items, areas, profile, library);
       items = r.items.filter((x) => x.exercise); swaps.push(...r.swaps);
     }
-    let plan = planSession(items, { week: cw, weekMode, cycleType: cycle.cycle_type, cycleNo: cycle.cycle_no, ageBand: p.age_band, dumbbells: cycle.dumbbells,
+    let plan = planSession(items, { week: cw, weekMode, cycleType: cycle.cycle_type, cycleNo: cycle.capNo, ageBand: p.age_band, dumbbells: cycle.dumbbells,
       comeback, history: hist, settings });
     plan = applyHold(applySoreness(plan, prevSore).items);
     if (active.holdAndTrim) plan = applyHoldAndTrim(plan);
@@ -177,14 +189,50 @@ export function runPersona(p, content, { weeks = 30 } = {}) {
       week: cw, perWeek: cycle.template.days_per_week, today: date, lastLogId: log.id, settings, primariesProgressing: primariesProgressing(weekRows) });
     adjustments.push(...act.adjustments.map((a) => ({ ...a, g: curG })));
     flags.push(...act.flags.map((f) => ({ ...f, date, created_at: `${date}T12:00:00Z`, cycle_no: cycle.cycle_no })));
+    const offers = offer(plan, cw, date);
     const ctx = { cycle, profile, areas, ageBand: p.age_band, settings, cw };   // extra sets are allowed by line (extraSet flag)
     const checked = lines.map((l) => ({ ...l, checks: lineChecks(l, ctx) }));
     for (const l of checked) out.violations.push(...l.checks.map((c) => ({ ...c, cycle: cycle.cycle_no, date, slot: l.slot, exercise: l.id })));
     out.violations.push(...sessionChecks({ gapDays, comeback: comeback.mode, settings }).map((c) => ({ ...c, cycle: cycle.cycle_no, date })));
-    return { letter: s.letter, date, cw, weekMode, comeback: comeback.mode, scaled, holdAndTrim: active.holdAndTrim, lighterByCheckin, extraSets: extra, swaps,
+    return { letter: s.letter, date, cw, weekMode, comeback: comeback.mode, second: Boolean(comeback.second), standing, offers, scaled, holdAndTrim: active.holdAndTrim, lighterByCheckin, extraSets: extra, swaps,
       checkin: { feel: log.feel, energy: log.energy, soreness: log.soreness, sore: log.sore_areas, areas: log.workaround_areas, pain: s.pain || null },
       triggered: act.adjustments.map((a) => `${a.type} (${a.reason})`), flagsRaised: act.flags.map((f) => f.detail?.reason ?? f.type),
       messages: act.messages, lines: checked };
+  }
+
+  // In-cycle level-up offers on the reward screen (§5.3, B6): she accepts unless the persona says `"offer": "decline"`.
+  // Accepting raises the level and swaps that pattern's exercises for the rest of the cycle.
+  function offer(plan, cw, date) {
+    const cycleItems = cycle.plan.sessions.flatMap((x) => x.items.map((i) => ({ session: x.session, slot: i.slot.slot, ord: i.slot.ord,
+      pattern: i.slot.pattern, exercise_id: i.exercise?.id ?? null })));
+    const cycleSlots = cycle.plan.sessions.flatMap((x) => x.items.map((i) => i.slot));
+    const ceilings = levelCeilings(profileOf(), setups.find((x) => x.setup === patient.setup) ?? null, library.filter((e) => e.active));
+    const offers = levelUpOffers(plan.filter((it) => !it.swappedFor).map((it) => ({ slot: it.slot, exercise: it.exercise, range: it.range, measure: it.measure })), hist,
+      { week: cw, cycleItems, slots: cycleSlots, profile: profileOf(), library, ceilings, ageBand: p.age_band, adjustments, today: date, settings,
+        dumbbells: cycle.dumbbells }).slice(0, 1);   // the reward screen shows one offer at a time
+    const minWeek = Number(settings?.['levelup.offer_min_week'] ?? OFFER_DEFAULTS['levelup.offer_min_week']);
+    const days = Number(settings?.['levelup.offer_decline_days'] ?? OFFER_DEFAULTS['levelup.offer_decline_days']);
+    return offers.map((o) => {
+      const at = { cycle: cycle.cycle_no, date };
+      if (cw < minWeek) out.violations.push({ ...at, rule: 'offer_early', detail: `${o.pattern} offered in week ${cw}` });
+      const declined = adjustments.filter((a) => a.type === 'level_offer_declined' && a.detail.pattern === o.pattern).map((a) => a.created_at.slice(0, 10)).sort().pop();
+      if (declined && daysBetween(declined, date) < days) out.violations.push({ ...at, rule: 'offer_repeat', detail: `${o.pattern} again ${daysBetween(declined, date)} days after "Not yet"` });
+      const accept = p.offer !== 'decline';
+      const detail = { pattern: o.pattern, from: o.from, to: o.to, exercise: o.exercise.id, next: o.next.id };
+      adjustments.push({ type: accept ? 'level_offer_accepted' : 'level_offer_declined', reason: 'in_cycle_offer', detail, g: curG, created_at: `${date}T12:30:00Z` });
+      if (accept) {
+        patient.pattern_levels = { ...patient.pattern_levels, [o.pattern]: o.to };
+        cycle.levels = { ...cycle.levels, [o.pattern]: o.to };
+        for (const pk of o.picks) {
+          const it = cycle.plan.sessions.find((x) => x.session === pk.session)?.items.find((i) => i.slot.slot === pk.slot);
+          if (it) Object.assign(it, { exercise: lib[pk.exercise_id], reasons: pk.reasons });
+        }
+      }
+      const rec = { cycle: cycle.cycle_no, week: cw, g: curG, date, pattern: o.pattern, from: o.from, to: o.to, name: o.exercise.name, next: o.next.name,
+        outcome: accept ? 'accepted' : 'declined', swaps: o.picks.length };
+      out.levelUps.push(rec);
+      return rec;
+    });
   }
 
   // Her simulated performance: a capacity per exercise that grows a little each session; reps and rating follow
@@ -215,15 +263,7 @@ export function runPersona(p, content, { weeks = 30 } = {}) {
     }
     const stage = it.suggestion.stage || undefined;
     const setsLogged = Array.from({ length: sets }, () => (ex.measure === 'time' ? { weight: w, seconds: reps } : { weight: w, reps, stage }));
-    hist[ex.id] = [{ skipped: false, rating, sets: setsLogged }, ...(hist[ex.id] || [])];
-    if (it.slot.role === 'P' || it.slot.role === 'S') {
-      (recent[ex.id] ||= []).push({ allTop: reps >= range.hi, rating });
-      const atCeiling = it.suggestion.action === 'level-up-check' || it.suggestion.action === 'progress-bodyweight';
-      if (!out.levelUps.some((l) => l.id === ex.id && l.cycle === cycle.cycle_no)
-        && shouldOfferLevelUp({ level: ex.level, recent: recent[ex.id], atCeiling, cycleType: cycle.cycle_type, week: cw })) {
-        out.levelUps.push({ id: ex.id, name: ex.name, pattern: ex.pattern, cycle: cycle.cycle_no, week: cw, date });
-      }
-    }
+    hist[ex.id] = [{ skipped: false, rating, sets: setsLogged, created_at: `${date}T12:00:00Z` }, ...(hist[ex.id] || [])];
     const label = w == null ? (ex.measure === 'time' ? '' : 'bodyweight') : ex.load_type === 'band' ? `${BAND_LABELS[w]} band` : `${w} lb`;
     return { slot: it.slot.slot, role: it.slot.role, pattern: it.slot.pattern, id: ex.id, name: ex.name, level: ex.level, load_type: ex.load_type,
       measure: ex.measure, exercise: ex, sets, written: it.slot, range: `${range.lo}-${range.hi}`, rir: it.dose.rir, weight: w, lastWeight: it.lastWeight ?? null,

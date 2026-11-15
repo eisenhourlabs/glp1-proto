@@ -111,3 +111,48 @@ export async function createNextCycle(patient, oldCycle, plan, content, { days, 
   if (proposalId) await db.from('ai_proposals').update({ applied_cycle_id: cycle.id }).eq('id', proposalId);
   return cycle;
 }
+
+/**
+ * Back after 28+ days inside a cycle (Framework §13, backlog B7): the same cycle type restarts at week 1 from today
+ * with the same exercises and levels; the old cycle is closed as abandoned. The restart is logged on the new cycle with
+ * the cycle number the age rules count from and her best streak so far (kept on the progress screen).
+ */
+export async function restartCycle(patient, oldCycle, { bestStreak = 0, fromWeek = null } = {}) {
+  must(await db.from('cycles').update({ status: 'abandoned' }).eq('id', oldCycle.id));
+  let cycle;
+  try {
+    cycle = must(await db.from('cycles').insert({
+      patient_id: patient.id, cycle_no: oldCycle.cycle_no + 1, template_id: oldCycle.template_id, content_version: oldCycle.content_version,
+      cycle_type: oldCycle.cycle_type, start_date: localToday(), session_minutes: oldCycle.session_minutes, status: 'active',
+    }).select().single());
+    const items = oldCycle.items.map(({ session, slot, ord, role, pattern, exercise_id, reasons }) => ({
+      cycle_id: cycle.id, patient_id: patient.id, session, slot, ord, role, pattern, exercise_id, reasons }));
+    must(await db.from('cycle_items').insert(items));
+  } catch (e) {
+    await db.from('cycles').update({ status: 'active' }).eq('id', oldCycle.id);
+    if (cycle) await db.from('cycles').update({ status: 'abandoned' }).eq('id', cycle.id);
+    throw e;
+  }
+  const capNo = oldCycle.restart?.cap_no ?? oldCycle.cycle_no;
+  must(await db.from('adjustments').insert({ patient_id: patient.id, cycle_id: cycle.id, type: 'comeback_restart', reason: 'away_28_days',
+    detail: { from_cycle: oldCycle.id, from_week: fromWeek, cap_no: capNo, best_streak: bestStreak } }));
+  return cycle;
+}
+
+/**
+ * She accepted an in-cycle level-up offer (B6): her level for the pattern goes up one and that pattern's exercises
+ * change for the rest of the cycle (offer.picks from levelUpOffers()). Logged with the evidence.
+ */
+export async function acceptLevelUp(patient, cycle, offer) {
+  const levels = { ...(patient.pattern_levels || {}), [offer.pattern]: offer.to };
+  await savePatient(patient.id, { pattern_levels: levels });
+  patient.pattern_levels = levels;
+  for (const p of offer.picks) {
+    must(await db.from('cycle_items').update({ exercise_id: p.exercise_id, reasons: p.reasons })
+      .eq('cycle_id', cycle.id).eq('session', p.session).eq('slot', p.slot));
+    const it = cycle.items.find((i) => i.session === p.session && i.slot === p.slot);
+    if (it) Object.assign(it, { exercise_id: p.exercise_id, reasons: p.reasons });
+  }
+  must(await db.from('adjustments').insert({ patient_id: patient.id, cycle_id: cycle.id, type: 'level_offer_accepted', reason: 'in_cycle_offer',
+    detail: { pattern: offer.pattern, from: offer.from, to: offer.to, exercise: offer.exercise.id, next: offer.next.id, swaps: offer.picks.length } }));
+}

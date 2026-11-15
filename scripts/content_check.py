@@ -193,6 +193,9 @@ SETTING_RANGES = {
     "levelup.max_area_reports": (1, 10), "levelup.cap_70_plus": (1, 4),
     # B3 band ladder (sessions in a row at each band stage) and B4 balance at 60+ (sessions a week with balance).
     "band.sessions_per_step": (1, 4), "balance.min_sessions_60_plus": (1, 4),
+    # B6 in-cycle level-up offers: first week of a cycle they can appear (Amanda Q5: week 4), days after "Not yet",
+    # and sessions in a row at each step of the bodyweight ladder (reps → 3-s lowering → pause).
+    "levelup.offer_min_week": (3, 9), "levelup.offer_decline_days": (7, 28), "bodyweight.sessions_per_step": (1, 4),
 }
 
 

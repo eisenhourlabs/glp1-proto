@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { startingLevels, startingCycle, shouldOfferLevelUp, shouldDropLevel } from '../../web/engine/levels.js';
+import { startingLevels, startingCycle, shouldDropLevel } from '../../web/engine/levels.js';
 
 test('starting levels from experience + Workout 1 check', () => {
   const none = startingLevels({ experience: 'none' });
@@ -18,18 +18,6 @@ test('starting cycle', () => {
   assert.equal(startingCycle({ experience: 'regular', check: { sitToStand: true, inclinePushup: true, hinge: true } }), 'C2');
   assert.equal(startingCycle({ experience: 'regular', check: { sitToStand: true } }), 'C1');
   assert.equal(startingCycle({ experience: 'some', check: { sitToStand: true, inclinePushup: true, hinge: true } }), 'C1');
-});
-
-test('level-up offers', () => {
-  const r = (allTop, rating) => ({ allTop, rating });
-  assert.equal(shouldOfferLevelUp({ level: 2, recent: [r(true, 'good'), r(false, 'good'), r(true, 'easy')], atCeiling: true }), true);
-  assert.equal(shouldOfferLevelUp({ level: 2, recent: [r(true, 'good'), r(true, 'hard')], atCeiling: true }), false);
-  assert.equal(shouldOfferLevelUp({ level: 2, recent: [r(true, 'good'), r(true, 'good')], atCeiling: false }), false, 'not at her ceiling: add weight instead');
-  assert.equal(shouldOfferLevelUp({ level: 2, cleanCycleAtLevel: true }), true);
-  assert.equal(shouldOfferLevelUp({ level: 4, cleanCycleAtLevel: true }), false);
-  const top2 = [r(true, 'good'), r(true, 'good')];
-  assert.equal(shouldOfferLevelUp({ level: 1, recent: top2, atCeiling: true, cycleType: 'C1', week: 2 }), false, 'technique weeks');
-  assert.equal(shouldOfferLevelUp({ level: 1, recent: top2, atCeiling: true, cycleType: 'C1', week: 3 }), true);
 });
 
 test('level drops', () => {

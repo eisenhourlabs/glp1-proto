@@ -48,6 +48,7 @@ export const HURTS = {
   ],
   sore: 'Soreness is normal early on and fades as your body adapts. You can keep going, a little lighter, or swap.',
   pain: 'Skip this exercise today. If it’s severe or getting worse, please contact your clinic.',
+  standing: 'We’ll keep working around that area until you tell us it feels better.',
 };
 
 export const RATING_OPTIONS = [
@@ -63,7 +64,8 @@ export const FAST_CUE = 'Lower with control, stand up with purpose.';
 export const COMEBACK = {
   welcome_back: 'Welcome back! Today is a little lighter so you can ease back in.',
   reentry: 'Welcome back! Your next two workouts are lighter while you get back in rhythm.',
-  restart: 'Welcome back! We’ll ease you in with lighter weights. Your levels are saved.',
+  reentry_second: 'One more lighter workout today, then you’re back to your usual plan.',
+  restart: 'Welcome back! We’ve restarted this cycle at week 1 with lighter weights. Your levels and exercises are saved.',
 };
 
 export const SKIP_OPTIONS = [

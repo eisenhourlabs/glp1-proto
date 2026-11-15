@@ -101,3 +101,18 @@ test('B15: rest-day suggestion at 60+ the day after a workout, lowest priority',
   assert.equal(notice({ restDay: true, weekMode: 'consolidate', rawWeek: 4 }), 'week_mode');
   assert.equal(notice({ restDay: true, comeback: 'welcome_back' }), 'comeback');
 });
+
+test('B7: comebackFor — the second lighter session, measured without the days between cycles', async () => {
+  const { comebackFor } = await import('../../web/engine/home_state.js');
+  const cyc = { start_date: '2026-03-02' };
+  const recent = [{ date: '2026-03-20', cycleStart: '2026-03-02' }, { date: '2026-03-04', cycleStart: '2026-03-02' }];
+  assert.equal(comebackFor(recent, cyc, '2026-03-22', {}).second, true);
+  assert.equal(comebackFor(recent.slice(0, 1), cyc, '2026-03-22', {}).mode, 'none');
+  assert.equal(comebackFor([], cyc, '2026-03-22', {}).mode, 'none');
+});
+
+test('B7: a restarted cycle measures the whole time away', () => {
+  const last = { date: '2026-01-20', cycleStart: '2026-01-05' };
+  assert.equal(comebackFrom(last, { start_date: '2026-03-20', restart: true }), '2026-01-20');
+  assert.notEqual(comebackFrom(last, { start_date: '2026-03-20' }), '2026-01-20', 'otherwise days waiting on the review are not a gap');
+});

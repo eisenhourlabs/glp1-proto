@@ -217,7 +217,7 @@ export function runWorkout(root, w) {
             s.item = { ...u, slot: s.item.slot }; s.sets = []; s.rating = null;
           }
         });
-        if (keepCurrent) { next(); if (kind === 'pain') toast(HURTS.pain); } else render();
+        if (keepCurrent) { next(); if (kind === 'pain') toast(`${HURTS.pain} ${HURTS.standing}`); } else render();
       }),
     ]);
   }
