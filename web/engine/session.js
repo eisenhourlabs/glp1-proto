@@ -7,7 +7,7 @@
 
 import { LOWER_PATTERNS, addDays } from './util.js';
 import { slotDose, nextInQueue, adaptiveWeekMode } from './cycle.js';
-import { suggestNext, reduceLoad, BAND_LABELS } from './load.js';
+import { suggestNext, reduceLoad, BAND_LABELS, BAND_TEMPO } from './load.js';
 import { contextFor, eligible } from './resolve.js';
 
 const DONE = new Set(['done', 'partial']);
@@ -62,7 +62,7 @@ export function workingSets(sets, measure) {
   const rows = (sets || []).map((s) => ({ weight: s.weight ?? null, reps: Number(measure === 'time' ? s.seconds : s.reps) || 0 }));
   if (!rows.length) return null;
   const w = rows[rows.length - 1].weight;
-  return { weight: w, sets: rows.filter((r) => r.weight === w).map(({ reps }) => ({ reps })) };
+  return { weight: w, sets: rows.filter((r) => r.weight === w).map(({ reps }) => ({ reps })), stage: Number(sets[sets.length - 1]?.stage ?? 0) };
 }
 
 /** Her last two non-skipped logs for one exercise (newest first) → suggestNext's {last, prevRating}. */
@@ -70,7 +70,9 @@ export function lastPerformance(history, measure) {
   const usable = (history || []).filter((l) => !l.skipped && l.sets?.length);
   if (!usable.length) return { last: null, prevRating: null };
   const ws = workingSets(usable[0].sets, measure);
-  return { last: ws && { ...ws, rating: usable[0].rating ?? null }, prevRating: usable[1]?.rating ?? null };
+  const prev = usable[1] ? workingSets(usable[1].sets, measure) : null;
+  return { last: ws && { ...ws, rating: usable[0].rating ?? null }, prevRating: usable[1]?.rating ?? null,
+    older: prev && { ...prev, rating: usable[1].rating ?? null } };
 }
 
 /** How a weight reads to her. */
@@ -95,16 +97,17 @@ function firstNote(loadType, range, measure) {
  * lastWeight, suggestion {action, targetReps, note}.
  */
 export function planSession(items, ctx) {
-  const { week, weekMode = 'build', cycleType, ageBand, dumbbells = [], comeback, history = {}, settings } = ctx;
+  const { week, weekMode = 'build', cycleType, cycleNo = null, ageBand, dumbbells = [], comeback, history = {}, settings } = ctx;
   return items.map((it) => {
     const ex = it.exercise;
     const measure = ex.measure === 'time' ? 'time' : 'reps';
     let dose = slotDose(it.slot, week, weekMode, settings);
+    if (seventyPlusCap({ ageBand, cycleNo, week, role: it.slot.role })) dose = { ...dose, sets: Math.min(dose.sets, 2) };
     if (comeback?.setDelta) dose = { ...dose, sets: Math.max(1, dose.sets + comeback.setDelta) };
     const range = measure === 'time' && dose.time ? dose.time : dose.reps;
-    const { last, prevRating } = lastPerformance(history[ex.id], measure);
+    const { last, prevRating, older } = lastPerformance(history[ex.id], measure);
     const s = suggestNext({
-      loadType: ex.load_type, last, prevRating, range, ageBand, weekMode, settings,
+      loadType: ex.load_type, last, prevRating, older, range, ageBand, weekMode, settings,
       lower: LOWER_PATTERNS.has(it.slot.pattern), earlyFoundations: cycleType === 'C1' && week <= 3,
       available: ex.load_type === 'dumbbell' && dumbbells.length ? dumbbells : undefined,
     });
@@ -116,10 +119,17 @@ export function planSession(items, ctx) {
       weight = reduceLoad(ex.load_type, weight, comeback.loadCutPct, { ageBand, available: dumbbells.length ? dumbbells : undefined });
       note = 'Welcome back! A little lighter today so you can ease back in.';
     }
+    const stage = ex.load_type === 'band' ? (s.stage ?? 0) : 0;
     return { ...it, dose, range, measure, weight, last, lastWeight: last?.weight ?? null,
-      suggestion: { action: s.action, targetReps: s.targetReps, note } };
+      suggestion: { action: s.action, targetReps: s.targetReps, note, stage, tempo: BAND_TEMPO[stage] || null } };
   });
 }
+
+/**
+ * 70+ (Framework §11.2, backlog B15, Amanda packet Q17): primaries capped at 2 sets for her first 4 weeks (weeks 1–4
+ * of her first cycle).
+ */
+export const seventyPlusCap = ({ ageBand, cycleNo, week, role }) => ageBand === '70+' && cycleNo === 1 && week <= 4 && role === 'P';
 
 /** Soreness hold (§10): where applySoreness marked holdLoad, don't add weight today. */
 export function applyHold(items) {

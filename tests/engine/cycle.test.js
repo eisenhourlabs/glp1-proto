@@ -87,3 +87,48 @@ test('chooseTemplate: 4-day only for experienced; falls back to 3-day', () => {
   assert.equal(chooseTemplate(T, { cycleType: 'C2', daysPerWeek: 4, experienced: true }).template_id, 'C2-4D');
   assert.equal(chooseTemplate(T, { cycleType: 'C1', daysPerWeek: 4, experienced: true }).template_id, 'C1-3D', 'no C1 4-day');
 });
+
+// ── B4: balance in at least 2 sessions a week at 60+ ──
+import { withBalance } from '../../web/engine/cycle.js';
+import { speedrunContent } from '../fixtures/speedrun_content.js';
+
+test('withBalance: under 60 the slots are unchanged', () => {
+  const c = speedrunContent();
+  const t = c.templates.find((x) => x.template_id === 'C1-2D');
+  assert.equal(withBalance(c.slots, t, { ageBand: '50-59', minutes: 30 }), c.slots);
+});
+
+test('withBalance: every template has ≥ 2 sessions with balance at 60+, at every length, including 2-day plans', () => {
+  const c = speedrunContent();
+  for (const t of c.templates) for (const minutes of [30, 45, 60]) for (const ageBand of ['60-69', '70+']) {
+    const out = withBalance(c.slots, t, { ageBand, minutes });
+    const withBa = t.sessions.filter(({ session }) => out.some((s) => s.template_id === t.template_id && s.session === session
+      && s.pattern === 'BA' && s.min_minutes <= minutes)).length;
+    assert.ok(withBa >= 2, `${t.template_id} ${minutes} min ${ageBand}: ${withBa}`);
+    for (const { session } of t.sessions) {
+      const ords = out.filter((s) => s.template_id === t.template_id && s.session === session).map((s) => s.ord);
+      assert.equal(new Set(ords).size, ords.length, 'ords stay unique');
+      assert.ok(ords.every(Number.isInteger));
+    }
+    const other = c.slots.filter((s) => s.template_id !== t.template_id);
+    assert.deepEqual(out.filter((s) => s.template_id !== t.template_id), other, 'other templates untouched');
+  }
+});
+
+test('withBalance: the added finisher sits after the last finisher, before optional slots', () => {
+  const c = speedrunContent();
+  const t = c.templates.find((x) => x.template_id === 'C1-2D');   // session B has balance, A has none
+  const out = withBalance(c.slots, t, { ageBand: '60-69', minutes: 30 });
+  const a = out.filter((s) => s.template_id === 'C1-2D' && s.session === 'A').sort((x, y) => x.ord - y.ord);
+  assert.deepEqual(a.map((s) => s.slot), ['P1', 'P2', 'S1', 'S2', 'F1', 'BAL', 'O1']);
+  assert.equal(a.find((s) => s.slot === 'BAL').pattern, 'BA');
+  assert.equal(withBalance(c.slots, t, { ageBand: '60-69', minutes: 30, settings: { 'balance.min_sessions_60_plus': 1 } }), c.slots);
+});
+
+test('materializeCycle resolves the added balance slot for a 60+ profile', () => {
+  const c = speedrunContent();
+  const t = c.templates.find((x) => x.template_id === 'C1-2D');
+  const profile = { equipment: ['chair', 'wall', 'band', 'db'], patternLevels: { BA: 1 } };
+  const plan = materializeCycle(t, c.slots, profile, c.library, { minutes: 30, ageBand: '70+' });
+  for (const s of plan.sessions) assert.ok(s.items.some((it) => it.slot.pattern === 'BA' && it.exercise), s.session);
+});

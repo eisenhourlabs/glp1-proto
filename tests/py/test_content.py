@@ -96,8 +96,9 @@ class SettingsTests(unittest.TestCase):
     def test_levelup_ranges(self):
         from content_check import _check_settings
         err = []
-        _check_settings({"levelup.min_adherence_pct": 75, "levelup.min_sessions": 0, "levelup.cap_70_plus": 5}, err)
-        self.assertEqual(len(err), 2)
+        _check_settings({"levelup.min_adherence_pct": 75, "levelup.min_sessions": 0, "levelup.cap_70_plus": 5,
+                         "band.sessions_per_step": 2, "balance.min_sessions_60_plus": 0}, err)
+        self.assertEqual(len(err), 3)
         self.assertIn("levelup.min_sessions: 0 is outside 1–30", err[0])
 
 

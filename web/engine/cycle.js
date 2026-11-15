@@ -1,7 +1,7 @@
 // Cycle mechanics (Framework §7): week of cycle, the adaptive week-4 / week-9 decision (§7.2a), weekly dose,
 // the session queue, and materializing a cycle (exercise per slot, fixed for the cycle).
 
-import { daysBetween, parseRange } from './util.js';
+import { daysBetween, parseRange, isSixtyPlus } from './util.js';
 import { resolveSession } from './resolve.js';
 
 export const DEFAULTS = {
@@ -11,6 +11,7 @@ export const DEFAULTS = {
   'adaptive.flag_count': 3,
   'adaptive.stalled_primaries': 2,
   'lighter_week.set_cut_pct': 45,
+  'balance.min_sessions_60_plus': 2,
 };
 const cfg = (settings, k) => (settings && settings[k] != null ? Number(settings[k]) : DEFAULTS[k]);
 
@@ -98,16 +99,55 @@ export function nextInQueue(sessionOrder, completedThisWeek) {
  * there's a choice (a repeated cycle type gets fresh exercises, Framework §14).
  * @returns {{templateId, sessions: Array<{session, name, items: Array<{slot, exercise, reasons}>}>, skipped: number}}
  */
-export function materializeCycle(template, slots, profile, library, { minutes = 45, used: avoid = [] } = {}) {
+export function materializeCycle(template, slots, profile, library, { minutes = 45, used: avoid = [], ageBand = null, settings } = {}) {
   const used = new Set(avoid);
   let skipped = 0;
+  const all = withBalance(slots, template, { ageBand, minutes, settings });
   const sessions = template.sessions.map(({ session, name }) => {
-    const own = slots.filter((s) => s.template_id === template.template_id && s.session === session);
+    const own = all.filter((s) => s.template_id === template.template_id && s.session === session);
     const items = resolveSession(own, profile, library, { minutes, used });
     skipped += items.filter((it) => !it.exercise).length;
     return { session, name, items };
   });
   return { templateId: template.template_id, sessions, skipped };
+}
+
+/**
+ * Balance at 60+ (Framework §4, §11.2; backlog B4, Amanda packet Q4): at least 2 sessions a week contain a balance
+ * slot at her session length. Sessions that already have a balance slot that only fits a longer workout get it at
+ * every length first; then sessions without one get a balance finisher (`BAL`, a copy of the template's balance slot,
+ * placed after the last finisher). Deterministic, so the planner rebuilds the same slots from the cycle each day.
+ * slots may hold every template's slots; only this template's change. Under 60 the slots come back unchanged.
+ */
+export function withBalance(slots, template, { ageBand, minutes = 45, settings } = {}) {
+  if (!isSixtyPlus(ageBand)) return slots;
+  const tid = template.template_id;
+  const mine = (out, session) => out.filter((s) => s.template_id === tid && s.session === session);
+  const fits = (out, session) => mine(out, session).some((s) => s.pattern === 'BA' && s.min_minutes <= minutes);
+  const need = Math.min(cfg(settings, 'balance.min_sessions_60_plus'), template.sessions.length);
+  const order = template.sessions.map((s) => s.session);
+  let out = slots;
+  let count = order.filter((sess) => fits(out, sess)).length;
+  const source = slots.find((s) => s.template_id === tid && s.pattern === 'BA');
+  if (count >= need || !source) return slots;
+  for (const sess of order) {                       // 1) bring an existing balance slot forward
+    if (count >= need) break;
+    const ba = !fits(out, sess) && mine(out, sess).find((s) => s.pattern === 'BA');
+    if (!ba) continue;
+    out = out.map((s) => (s === ba ? { ...s, min_minutes: Math.min(s.min_minutes, minutes) } : s));
+    count += 1;
+  }
+  for (const sess of order) {                       // 2) add a balance finisher
+    if (count >= need) break;
+    if (fits(out, sess)) continue;
+    const list = mine(out, sess).sort((a, b) => a.ord - b.ord);
+    const anchor = [...list].reverse().find((s) => s.role === 'F') ?? [...list].reverse().find((s) => s.role !== 'O');
+    const ord = (anchor?.ord ?? 0) + 1;
+    out = out.map((s) => (s.template_id === tid && s.session === sess && s.ord >= ord ? { ...s, ord: s.ord + 1 } : s));
+    out = [...out, { ...source, session: sess, slot: 'BAL', ord, role: 'F', min_minutes: Math.min(30, minutes), pair_with: null }];
+    count += 1;
+  }
+  return out;
 }
 
 /** Which template fits this patient (Framework §11.1): cycle type + days per week; 4-day only if experienced. */

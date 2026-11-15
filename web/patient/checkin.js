@@ -3,10 +3,10 @@
 import { h, clear } from '../shared/dom.js';
 import { stepScreen, choices, primary, secondary, statusLine } from '../shared/ui.js';
 import { addDays } from '../engine/util.js';
-import { checkinActions } from '../engine/checkin.js';
+import { checkinActions, primariesProgressing } from '../engine/checkin.js';
 import { weeklyCounts, streaks, rewardMessage } from '../engine/progress.js';
 import { localToday } from './api.js';
-import { saveCheckin, cycleLogs, flagsSince, cycleAdjustments, addAdjustment, raiseFlag } from './log_api.js';
+import { saveCheckin, cycleLogs, flagsSince, cycleAdjustments, addAdjustment, raiseFlag, sessionExerciseLogs } from './log_api.js';
 import { AREA_OPTIONS } from './session_copy.js';
 
 const FEEL = [
@@ -61,7 +61,12 @@ async function afterCheckin({ patient, cycle, log, week, perWeek, settings }) {
   const today = localToday();
   const [logs, flags, adjustments] = await Promise.all([
     cycleLogs(cycle.id), flagsSince(patient.id, addDays(today, -15)), cycleAdjustments(cycle.id)]);
-  const r = checkinActions({ logs, flags, adjustments, cycle, week, perWeek, today, lastLogId: log.id, settings });
+  // "Too easy" rule (§12, B8): did every primary she logged this week rate Good or Easy?
+  const weekDone = logs.filter((l) => l.week === week && (l.status === 'done' || l.status === 'partial'));
+  const rows = (await Promise.all(weekDone.map((l) => sessionExerciseLogs(l.id).then((ex) => ex.map((e) => ({ ...e, session: l.session }))))))
+    .flat().map((e) => ({ ...e, role: (cycle.items || []).find((i) => i.session === e.session && i.slot === e.slot)?.role ?? (e.slot === 'BAL' ? 'F' : null) }));
+  const r = checkinActions({ logs, flags, adjustments, cycle, week, perWeek, today, lastLogId: log.id, settings,
+    primariesProgressing: primariesProgressing(rows) });
   for (const adj of r.adjustments) await addAdjustment(patient.id, cycle.id, adj);
   for (const f of r.flags) await raiseFlag(patient.id, f.type, f.detail);
   return r.messages;

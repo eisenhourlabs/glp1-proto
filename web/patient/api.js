@@ -62,7 +62,7 @@ export async function createFirstCycle(patient, content) {
   const template = chooseTemplate(content.templates, { cycleType, daysPerWeek: patient.days_per_week, experienced: cycleType !== 'C1' });
   if (!template) throw new Error('No template fits this schedule.');
   const profile = engineProfile({ ...patient, pattern_levels: patternLevels });
-  const plan = materializeCycle(template, content.slots, profile, content.library, { minutes: patient.session_minutes });
+  const plan = materializeCycle(template, content.slots, profile, content.library, { minutes: patient.session_minutes, ageBand: patient.age_band });
   await savePatient(patient.id, { pattern_levels: patternLevels });
   const cycle = must(await db.from('cycles').insert({
     patient_id: patient.id, cycle_no: 1, template_id: template.template_id, content_version: content.version,
@@ -89,7 +89,7 @@ export async function createNextCycle(patient, oldCycle, plan, content, { days, 
   const profile = engineProfile({ ...patient, pattern_levels: levels });
   const slots = slotsWithSwaps(content.slots.filter((s) => s.template_id === template.template_id), plan.swaps || []);
   const avoid = cycleType === oldCycle.cycle_type ? oldCycle.items.map((i) => i.exercise_id).filter(Boolean) : [];
-  const built = materializeCycle(template, slots, profile, content.library, { minutes, used: avoid });
+  const built = materializeCycle(template, slots, profile, content.library, { minutes, used: avoid, ageBand: patient.age_band });
   must(await db.from('cycles').update({ status: 'done' }).eq('id', oldCycle.id));
   let cycle;
   try {

@@ -62,11 +62,13 @@ test('weekModeFor: only weeks 4 and 9; stored decision wins; computed from the t
 
 test('workingSets keeps the sets at the final weight; lastPerformance reads newest first', () => {
   assert.deepEqual(workingSets([{ weight: 10, reps: 10 }, { weight: 12, reps: 11 }, { weight: 12, reps: 10 }], 'reps'),
-    { weight: 12, sets: [{ reps: 11 }, { reps: 10 }] });
-  assert.deepEqual(workingSets([{ seconds: 25 }, { seconds: 30 }], 'time'), { weight: null, sets: [{ reps: 25 }, { reps: 30 }] });
+    { weight: 12, sets: [{ reps: 11 }, { reps: 10 }], stage: 0 });
+  assert.deepEqual(workingSets([{ seconds: 25 }, { seconds: 30 }], 'time'), { weight: null, sets: [{ reps: 25 }, { reps: 30 }], stage: 0 });
+  assert.equal(workingSets([{ weight: 2, reps: 12, stage: 1 }], 'reps').stage, 1, 'band stage is logged with the set');
   assert.equal(workingSets([], 'reps'), null);
   const hist = [{ skipped: true, sets: [] }, { sets: [{ weight: 15, reps: 12 }], rating: 'good' }, { sets: [{ weight: 12, reps: 12 }], rating: 'hard' }];
-  assert.deepEqual(lastPerformance(hist, 'reps'), { last: { weight: 15, sets: [{ reps: 12 }], rating: 'good' }, prevRating: 'hard' });
+  assert.deepEqual(lastPerformance(hist, 'reps'), { last: { weight: 15, sets: [{ reps: 12 }], stage: 0, rating: 'good' }, prevRating: 'hard',
+    older: { weight: 12, sets: [{ reps: 12 }], stage: 0, rating: 'hard' } });
   assert.deepEqual(lastPerformance([], 'reps'), { last: null, prevRating: null });
 });
 
@@ -152,4 +154,28 @@ test('lastTimeText', () => {
 
 test('sessionSummary', () => {
   assert.deepEqual(sessionSummary([{ sets: [{}, {}] }, { sets: [{}] }, { skipped: true, sets: [] }]), { exercises: 2, sets: 3, skipped: 1 });
+});
+
+// B15: 70+ main lifts at 2 sets for the first 4 weeks (Framework §11.2, Amanda packet Q17).
+import { seventyPlusCap } from '../../web/engine/session.js';
+test('seventyPlusCap: 70+, first cycle, weeks 1–4, primaries only', () => {
+  assert.equal(seventyPlusCap({ ageBand: '70+', cycleNo: 1, week: 4, role: 'P' }), true);
+  assert.equal(seventyPlusCap({ ageBand: '70+', cycleNo: 1, week: 5, role: 'P' }), false);
+  assert.equal(seventyPlusCap({ ageBand: '70+', cycleNo: 2, week: 1, role: 'P' }), false);
+  assert.equal(seventyPlusCap({ ageBand: '70+', cycleNo: 1, week: 1, role: 'S' }), false);
+  assert.equal(seventyPlusCap({ ageBand: '60-69', cycleNo: 1, week: 1, role: 'P' }), false);
+  const it = { slot: slot('SQ', { sets: [3, 3, 3, 3, 3, 3, 3, 3] }), exercise: lib.SQ07 };
+  const sets = (o) => planSession([it], { week: 3, cycleNo: 1, ageBand: '70+', ...o })[0].dose.sets;
+  assert.equal(sets({}), 2);
+  assert.equal(sets({ week: 5 }), 3);
+  assert.equal(sets({ ageBand: '50-59' }), 3);
+});
+
+test('B3: planSession carries the band stage and its tempo line', () => {
+  const it = { slot: slot('VP'), exercise: lib.VP01 };
+  const hist = { VP01: [{ rating: 'good', sets: [{ weight: 2, reps: 14, stage: 0 }, { weight: 2, reps: 14, stage: 0 }] },
+    { rating: 'good', sets: [{ weight: 2, reps: 14 }, { weight: 2, reps: 14 }] }] };
+  const out = planSession([it], { week: 3, history: hist })[0];
+  assert.deepEqual([out.suggestion.action, out.weight, out.suggestion.stage], ['tempo', 2, 1]);
+  assert.equal(out.suggestion.tempo, 'Lower for 3 seconds on every rep.');
 });

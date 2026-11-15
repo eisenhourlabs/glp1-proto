@@ -25,6 +25,8 @@ export const RULES = {
   review_invalid: 'Cycle review plan fails the validator (§14)',
   level_step: 'A level change of more than one step at a review (§5.3)',
   level_ceiling: 'A level-up above her setup or library ceiling (§5.3, B1)',
+  extra_set: 'An extra set outside a secondary slot (§12, B8)',
+  balance_60: 'A full 60+ week with fewer than 2 workouts containing balance (§4, B4)',
 };
 export const WATCH = {
   levelup_not_applied: 'Level-up earned but never applied (B1, B6)',
@@ -48,8 +50,9 @@ export function lineChecks(l, ctx) {
   for (const a of new Set([...ctx.profile.workarounds, ...ctx.areas])) if ((ex.area_load?.[a] ?? 0) > 1) add('workaround', a);
   if (!equipOk(ex.equipment, ['none', ...ctx.cycle.equipment])) add('equipment', ex.equipment);
   if ((l.role === 'P' || l.role === 'S') && COMPOUND.has(l.pattern) && minRir(l.rir) < num(ctx.settings, 'effort.min_rir_compound', 2)) add('rir', String(l.rir));
-  const written = slotDose(l.written, ctx.cw, 'build', ctx.settings).sets;
+  const written = slotDose(l.written, ctx.cw, 'build', ctx.settings).sets + (l.extraSet ? 1 : 0);
   if (l.sets > written) add('sets_above', `${l.sets} > ${written}`);
+  if (l.extraSet && l.role !== 'S') add('extra_set', `${l.role} slot`);
   if (l.weight != null && l.lastWeight != null && l.weight > l.lastWeight && !l.found) {
     const opts = { lower: LOWER_PATTERNS.has(l.pattern), ageBand: ctx.ageBand,
       available: l.load_type === 'dumbbell' && ctx.cycle.dumbbells?.length ? ctx.cycle.dumbbells : undefined };
@@ -69,7 +72,7 @@ export function sessionChecks({ gapDays, comeback, settings }) {
 }
 
 /** Week-level rules and watch items. */
-export function weekChecks(wk, settings) {
+export function weekChecks(wk, settings, { ageBand } = {}) {
   const violations = []; const watch = [];
   const at = { cycle: wk.cycle, week: wk.g };
   const incs = new Map();
@@ -83,6 +86,11 @@ export function weekChecks(wk, settings) {
   const maxInc = num(settings, 'progression.max_increments_per_week', 2);
   for (const [id, n] of incs) if (n > maxInc) violations.push({ ...at, rule: 'increments', exercise: id, detail: `${n} increases` });
   for (const [id, letters] of l1) if (letters.size > 1) watch.push({ ...at, rule: 'level1_repeat', exercise: id, detail: `sessions ${[...letters].join(', ')}` });
+  const sixty = ageBand === '60-69' || ageBand === '70+';
+  const withBalance = wk.sessions.filter((s) => s.lines.some((l) => l.pattern === 'BA')).length;
+  if (sixty && wk.sessions.length >= 2 && wk.sessions.length >= wk.planned && withBalance < 2 && !wk.sessions.some((s) => s.swaps?.length)) {
+    violations.push({ ...at, rule: 'balance_60', detail: `${withBalance} of ${wk.sessions.length} workouts had balance` });
+  }
   const checks = wk.sessions.map((s) => s.checkin.feel);
   if (checks.length && checks.every((f) => f === 'too_easy') && !wk.adjustments.some((a) => a.type === 'extra_secondary_sets')) {
     watch.push({ ...at, rule: 'too_easy_no_extra_sets', detail: `${checks.length} "too easy" check-ins` });

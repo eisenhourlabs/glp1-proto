@@ -3,9 +3,10 @@
 import { h } from '../shared/dom.js';
 import { stepScreen, choices, primary, secondary, statusLine } from '../shared/ui.js';
 import { baseItems, planSession, applyHold } from '../engine/session.js';
+import { withBalance } from '../engine/cycle.js';
 import { makeEasier, applyWorkarounds, applySoreness, scaleToday } from '../engine/readiness.js';
 import { isSixtyPlus } from '../engine/util.js';
-import { applyHoldAndTrim } from '../engine/checkin.js';
+import { applyHoldAndTrim, extraSetSlots, applyExtraSets } from '../engine/checkin.js';
 import { engineProfile } from './api.js';
 import { exerciseHistory } from './log_api.js';
 import { PRE_SESSION, ENERGY_OPTIONS, AREA_OPTIONS, SCALE_TODAY } from './session_copy.js';
@@ -19,13 +20,21 @@ export function makePlanner(env, today) {
   const profile = engineProfile(patient);
   const lib = content.library;
   const ctx = (history) => ({
-    week: Math.min(week, 9), weekMode, cycleType: cycle.cycle_type, ageBand: patient.age_band,
+    week: Math.min(week, 9), weekMode, cycleType: cycle.cycle_type, cycleNo: cycle.cycle_no, ageBand: patient.age_band,
     dumbbells: (patient.dumbbells_available || []).map(Number), comeback, history, settings,
   });
+  const template = content.templates.find((t) => t.template_id === cycle.template_id);
+  const cycleSlots = withBalance(content.slots.filter((s) => s.template_id === cycle.template_id), template,
+    { ageBand: patient.age_band, minutes: cycle.session_minutes, settings });
+  // "Too easy" week (§12, B8): +1 set on up to 2 secondaries per workout, within the weekly volume ceiling.
+  const extraKeys = env.extraSets ? extraSetSlots(Object.fromEntries(template.sessions.map(({ session }) => [session,
+    cycleSlots.filter((s) => s.session === session && (cycle.items || []).some((i) => i.session === session && i.slot === s.slot && i.exercise_id))])),
+  { week, cycleType: cycle.cycle_type, settings }) : new Set();
   const plan = async (items) => {
     const ids = [...new Set(items.map((it) => it.exercise.id))];
     const history = await exerciseHistory(patient.id, ids, { excludeSession: env.excludeSession ?? null });
     let out = planSession(items, ctx(history));
+    if (extraKeys.size) out = applyExtraSets(out, extraKeys, out[0]?.slot.session);
     out = applyHold(applySoreness(out, today.soreAreas || []).items);
     if (env.holdAndTrim) out = applyHoldAndTrim(out);
     return today.scale ? scaleToday(out, settings) : out;
@@ -34,8 +43,7 @@ export function makePlanner(env, today) {
     profile, lib,
     /** Today's items for a session, in order. */
     async build(session) {
-      const slots = content.slots.filter((s) => s.template_id === cycle.template_id);
-      let items = baseItems(cycle.items, session, slots, lib);
+      let items = baseItems(cycle.items, session, cycleSlots, lib);
       if (today.easier) items = makeEasier(items, profile, lib);
       if (today.areas?.length) items = applyWorkarounds(items, today.areas, profile, lib).items;
       return plan(items.filter((it) => it.exercise));

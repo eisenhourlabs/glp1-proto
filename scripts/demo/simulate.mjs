@@ -3,7 +3,7 @@
 // decisions and, after 9 weeks, the review and her second cycle. Days are offsets from the seed day (0 = today).
 
 import { startingLevels, startingCycle } from '../../web/engine/levels.js';
-import { chooseTemplate, materializeCycle } from '../../web/engine/cycle.js';
+import { chooseTemplate, materializeCycle, withBalance } from '../../web/engine/cycle.js';
 import { roundDownToStep } from '../../web/engine/load.js';
 import { baseItems, planSession, weekModeFor, weekStatus, sessionOrder } from '../../web/engine/session.js';
 import { scaleToday } from '../../web/engine/readiness.js';
@@ -52,7 +52,7 @@ export function simulatePersona(p, content, { anchor }) {
 
   function newCycle(type, start, avoid) {
     const template = chooseTemplate(content.templates, { cycleType: type, daysPerWeek: p.days, experienced: type !== 'C1' });
-    const built = materializeCycle(template, content.slots.filter((s) => s.template_id === template.template_id), profile, content.library, { minutes: p.minutes, used: avoid });
+    const built = materializeCycle(template, content.slots.filter((s) => s.template_id === template.template_id), profile, content.library, { minutes: p.minutes, used: avoid, ageBand: p.age_band, settings: content.settings });
     const c = { cycle_no: cycleNo, cycle_type: type, template_id: template.template_id, start, session_minutes: p.minutes, status: 'active',
       week_modes: {}, template, items: built.sessions.flatMap((s) => s.items.map((it) => ({ session: s.session, slot: it.slot.slot, ord: it.slot.ord,
         role: it.slot.role, pattern: it.slot.pattern, exercise_id: it.exercise?.id ?? null, reasons: it.reasons }))) };
@@ -100,8 +100,9 @@ export function simulatePersona(p, content, { anchor }) {
     const weekMode = cycle.week_modes[week]?.mode ?? (active.lighterWeek ? 'lighter' : 'build');
     const energy = r() < (p.lowEnergyRate ?? 0.08) ? 'low' : r() < 0.4 ? 'good' : 'ok';
     const scaled = energy === 'low' && r() < 0.65;
-    let items = baseItems(cycle.items, st.next, cycle.template ? content.slots.filter((s) => s.template_id === cycle.template_id) : [], content.library);
-    items = planSession(items, { week, weekMode, cycleType: cycle.cycle_type, ageBand: p.age_band, dumbbells: p.dumbbells ?? [], history, settings });
+    let items = baseItems(cycle.items, st.next, cycle.template ? withBalance(content.slots.filter((s) => s.template_id === cycle.template_id), cycle.template,
+      { ageBand: p.age_band, minutes: p.minutes, settings }) : [], content.library);
+    items = planSession(items, { week, weekMode, cycleType: cycle.cycle_type, cycleNo: cycle.cycle_no, ageBand: p.age_band, dumbbells: p.dumbbells ?? [], history, settings });
     if (active.holdAndTrim) items = applyHoldAndTrim(items);
     if (scaled) items = scaleToday(items, settings);
 
@@ -131,7 +132,8 @@ export function simulatePersona(p, content, { anchor }) {
       if (rating === 'hard') hardCount += 1;
       const sets = Array.from({ length: it.dose.sets }, (_, k) => {
         const n = k === it.dose.sets - 1 && rating === 'hard' ? Math.max(3, reps - 1) : reps;
-        return time ? { seconds: n, ...(weight != null ? { weight } : {}) } : { reps: n, ...(weight != null ? { weight } : {}) };
+        return time ? { seconds: n, ...(weight != null ? { weight } : {}) }
+          : { reps: n, ...(weight != null ? { weight } : {}), ...(it.suggestion.stage ? { stage: it.suggestion.stage } : {}) };
       });
       const clock = `${String(17 + (d % 3)).padStart(2, '0')}:${String(10 + (out.exercise_logs.length % 50)).padStart(2, '0')}`;
       const log = { log_ref: id, cycle_no: cycle.cycle_no, slot: it.slot.slot, exercise_id: ex.id, sets, rating, skipped: false, day: off(day), time: clock };
