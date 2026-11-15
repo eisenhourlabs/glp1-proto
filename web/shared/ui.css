@@ -152,6 +152,7 @@ textarea { font: inherit; color: inherit; background: var(--surface); width: 100
 .workout-bar .progress { margin: 4px 0 0; }
 .btn-warn { background: transparent; color: var(--danger); border-color: var(--danger); font-size: .85rem; padding: 6px 12px; min-height: 40px; }
 .target { font-size: 1.1rem; font-weight: 600; margin: 4px 0; }
+.tempo { font-weight: 600; color: var(--brand); margin: 0 0 4px; }
 .note-strong { font-weight: 600; color: var(--good); margin: 8px 0; }
 details.cues { margin: 8px 0 12px; }
 details.cues summary { cursor: pointer; color: var(--brand); font-weight: 600; min-height: 36px; display: flex; align-items: center; }

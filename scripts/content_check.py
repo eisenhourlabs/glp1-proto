@@ -148,7 +148,8 @@ def _check_templates(c, err, settings):
         for s in sl:
             if s["min_minutes"] <= 30: at30[s["pattern"]] += 1
         for p, n in COVER_MIN.items():
-            if at30[p] < n: err.append(f"template {t['template_id']}: {p} appears {at30[p]}× at 30 min; Framework §4 needs {n}")
+            if at30[p] < n: err.append(f"template {t['template_id']}: {p} appears {at30[p]}× at 30 min; Framework §4 needs {n}"
+                                       + (" (the app copies it to give 60+ a second balance session)" if p == "BA" else ""))
         if at30["SQ"] + at30["HI"] + at30["SL"] < 3: err.append(f"template {t['template_id']}: fewer than 3 lower-body slots at 30 min")
         if at30["HR"] + at30["VR"] < at30["HP"] + at30["VP"]: err.append(f"template {t['template_id']}: less pulling than pushing at 30 min")
         ceiling = settings.get("volume.ceiling_c3", 14) if t["cycle_type"] == "C3" else settings.get("volume.ceiling_c1_c2", 12)
@@ -190,6 +191,8 @@ def _check_resolvability(c, err, warn, summary):
 SETTING_RANGES = {
     "levelup.min_adherence_pct": (50, 100), "levelup.min_sessions": (1, 30), "levelup.too_hard_hold_pct": (10, 100),
     "levelup.max_area_reports": (1, 10), "levelup.cap_70_plus": (1, 4),
+    # B3 band ladder (sessions in a row at each band stage) and B4 balance at 60+ (sessions a week with balance).
+    "band.sessions_per_step": (1, 4), "balance.min_sessions_60_plus": (1, 4),
 }
 
 

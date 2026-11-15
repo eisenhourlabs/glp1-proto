@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { step, roundDownToStep, findYourWeight, suggestNext, scaleTodayWeight, reduceLoad } from '../../web/engine/load.js';
+import { bandNext, step, roundDownToStep, findYourWeight, suggestNext, scaleTodayWeight, reduceLoad } from '../../web/engine/load.js';
 
 const R = { lo: 8, hi: 12 };
 const last = (weight, reps, rating) => ({ weight, sets: reps.map((r) => ({ reps: r })), rating });
@@ -73,7 +73,41 @@ test('60+ and kettlebells progress reps first', () => {
   assert.deepEqual([ready.action, ready.weight], ['increase', 17.5]);
   assert.equal(suggestNext({ loadType: 'kettlebell', last: last(18, [12, 12, 12], 'good'), range: R }).action, 'hold');
   assert.equal(suggestNext({ loadType: 'band', last: last(2, [12, 12, 12], 'good'), range: R }).action, 'hold', 'bands: reps first');
-  assert.equal(suggestNext({ loadType: 'band', last: last(2, [14, 14, 14], 'good'), range: R }).weight, 3);
+  const once = suggestNext({ loadType: 'band', last: last(2, [14, 14, 14], 'good'), range: R });
+  assert.deepEqual([once.action, once.weight], ['hold', 2], 'bands: one session at the top + 2 is not enough (B3)');
+});
+
+// B3: the band ladder (Amanda packet Q8).
+const bl = (w, reps, rating, stage = 0) => ({ weight: w, sets: reps.map((r) => ({ reps: r })), rating, stage });
+const band = (l, o, extra = {}) => bandNext({ last: l, older: o, range: R, ...extra });
+
+test('B3 band ladder: top + 2 twice → 3-second lowering → pause → next band', () => {
+  const s1 = band(bl(2, [14, 14], 'good'), bl(2, [14, 14], 'easy'));
+  assert.deepEqual([s1.action, s1.weight, s1.stage], ['tempo', 2, 1]);
+  assert.equal(s1.note, 'Same band, slower now.');
+  const s2 = band(bl(2, [12, 12], 'good', 1), bl(2, [12, 12], 'good', 1));
+  assert.deepEqual([s2.action, s2.weight, s2.stage], ['tempo', 2, 2]);
+  const s3 = band(bl(2, [12, 12], 'good', 2), bl(2, [12, 12], 'good', 2));
+  assert.deepEqual([s3.action, s3.weight, s3.stage], ['increase', 3, 0]);
+  assert.equal(band(bl(5, [12, 12], 'good', 2), bl(5, [12, 12], 'good', 2)).action, 'level-up-check', 'no band above 5');
+});
+
+test('B3: each step needs 2 sessions in a row at that band and stage', () => {
+  assert.equal(band(bl(2, [12, 12], 'good', 1), bl(2, [14, 14], 'good', 0)).stage, 1, 'the first session at a new stage only counts once');
+  assert.equal(band(bl(2, [12, 11], 'good', 1), bl(2, [12, 12], 'good', 1)).action, 'hold');
+  assert.equal(band(bl(2, [12, 12], 'hard', 2), bl(2, [12, 12], 'good', 2)).action, 'hold');
+  assert.equal(band(bl(2, [14, 14], 'good'), bl(1, [14, 14], 'good')).action, 'hold', 'the older session was another band');
+  assert.equal(band(bl(2, [14, 14], 'good'), bl(2, [14, 14], 'good'), { settings: { 'band.sessions_per_step': 1 } }).stage, 1);
+  assert.equal(band(bl(2, [14, 14], 'good'), bl(2, [14, 14], 'good'), { weekMode: 'consolidate' }).action, 'hold');
+  assert.equal(band(bl(2, [12, 12], 'good', 1), null).note, 'Lower for 3 seconds on every rep.');
+});
+
+test('B3: a band only drops after two sessions below the range, never straight back', () => {
+  const after = band(bl(3, [8, 7], 'hard'), bl(2, [12, 12], 'good', 2));
+  assert.deepEqual([after.action, after.weight, after.stage], ['hold', 3, 0], 'first rough session on a new band: stay');
+  const twice = band(bl(3, [8, 7], 'hard'), bl(3, [9, 8], 'hard'));
+  assert.deepEqual([twice.action, twice.weight, twice.stage], ['decrease', 2, 0]);
+  assert.equal(band(bl(1, [8, 7], 'hard'), bl(1, [8, 7], 'hard')).action, 'hold', 'no lighter band than 1');
 });
 
 test('hold weeks never increase', () => {

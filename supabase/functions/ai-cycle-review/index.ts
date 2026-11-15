@@ -358,7 +358,7 @@ const __cycle = (() => {
 // Cycle mechanics (Framework §7): week of cycle, the adaptive week-4 / week-9 decision (§7.2a), weekly dose,
 // the session queue, and materializing a cycle (exercise per slot, fixed for the cycle).
 
-const { daysBetween, parseRange } = __util;
+const { daysBetween, parseRange, isSixtyPlus } = __util;
 const { resolveSession } = __resolve;
 const DEFAULTS = {
   'adaptive.consistent_pct': 75,
@@ -367,6 +367,7 @@ const DEFAULTS = {
   'adaptive.flag_count': 3,
   'adaptive.stalled_primaries': 2,
   'lighter_week.set_cut_pct': 45,
+  'balance.min_sessions_60_plus': 2,
 };
 const cfg = (settings, k) => (settings && settings[k] != null ? Number(settings[k]) : DEFAULTS[k]);
 
@@ -454,16 +455,55 @@ function nextInQueue(sessionOrder, completedThisWeek) {
  * there's a choice (a repeated cycle type gets fresh exercises, Framework §14).
  * @returns {{templateId, sessions: Array<{session, name, items: Array<{slot, exercise, reasons}>}>, skipped: number}}
  */
-function materializeCycle(template, slots, profile, library, { minutes = 45, used: avoid = [] } = {}) {
+function materializeCycle(template, slots, profile, library, { minutes = 45, used: avoid = [], ageBand = null, settings } = {}) {
   const used = new Set(avoid);
   let skipped = 0;
+  const all = withBalance(slots, template, { ageBand, minutes, settings });
   const sessions = template.sessions.map(({ session, name }) => {
-    const own = slots.filter((s) => s.template_id === template.template_id && s.session === session);
+    const own = all.filter((s) => s.template_id === template.template_id && s.session === session);
     const items = resolveSession(own, profile, library, { minutes, used });
     skipped += items.filter((it) => !it.exercise).length;
     return { session, name, items };
   });
   return { templateId: template.template_id, sessions, skipped };
+}
+
+/**
+ * Balance at 60+ (Framework §4, §11.2; backlog B4, Amanda packet Q4): at least 2 sessions a week contain a balance
+ * slot at her session length. Sessions that already have a balance slot that only fits a longer workout get it at
+ * every length first; then sessions without one get a balance finisher (`BAL`, a copy of the template's balance slot,
+ * placed after the last finisher). Deterministic, so the planner rebuilds the same slots from the cycle each day.
+ * slots may hold every template's slots; only this template's change. Under 60 the slots come back unchanged.
+ */
+function withBalance(slots, template, { ageBand, minutes = 45, settings } = {}) {
+  if (!isSixtyPlus(ageBand)) return slots;
+  const tid = template.template_id;
+  const mine = (out, session) => out.filter((s) => s.template_id === tid && s.session === session);
+  const fits = (out, session) => mine(out, session).some((s) => s.pattern === 'BA' && s.min_minutes <= minutes);
+  const need = Math.min(cfg(settings, 'balance.min_sessions_60_plus'), template.sessions.length);
+  const order = template.sessions.map((s) => s.session);
+  let out = slots;
+  let count = order.filter((sess) => fits(out, sess)).length;
+  const source = slots.find((s) => s.template_id === tid && s.pattern === 'BA');
+  if (count >= need || !source) return slots;
+  for (const sess of order) {                       // 1) bring an existing balance slot forward
+    if (count >= need) break;
+    const ba = !fits(out, sess) && mine(out, sess).find((s) => s.pattern === 'BA');
+    if (!ba) continue;
+    out = out.map((s) => (s === ba ? { ...s, min_minutes: Math.min(s.min_minutes, minutes) } : s));
+    count += 1;
+  }
+  for (const sess of order) {                       // 2) add a balance finisher
+    if (count >= need) break;
+    if (fits(out, sess)) continue;
+    const list = mine(out, sess).sort((a, b) => a.ord - b.ord);
+    const anchor = [...list].reverse().find((s) => s.role === 'F') ?? [...list].reverse().find((s) => s.role !== 'O');
+    const ord = (anchor?.ord ?? 0) + 1;
+    out = out.map((s) => (s.template_id === tid && s.session === sess && s.ord >= ord ? { ...s, ord: s.ord + 1 } : s));
+    out = [...out, { ...source, session: sess, slot: 'BAL', ord, role: 'F', min_minutes: Math.min(30, minutes), pair_with: null }];
+    count += 1;
+  }
+  return out;
 }
 
 /** Which template fits this patient (Framework §11.1): cycle type + days per week; 4-day only if experienced. */
@@ -473,7 +513,7 @@ function chooseTemplate(templates, { cycleType, daysPerWeek, experienced }) {
     ?? templates.find((t) => t.active && t.cycle_type === cycleType && t.days_per_week === 3)
     ?? null;
 }
-return { DEFAULTS, weekOfCycle, isConsistent, needsRest, adaptiveWeekMode, weekModeMessage, slotDose, nextInQueue, materializeCycle, chooseTemplate };
+return { DEFAULTS, weekOfCycle, isConsistent, needsRest, adaptiveWeekMode, weekModeMessage, slotDose, nextInQueue, materializeCycle, withBalance, chooseTemplate };
 })();
 
 // ── web/engine/load.js ──
@@ -492,6 +532,7 @@ const DEFAULTS = {
   'progression.double_jump_extra_reps': 3,
   'progression.drop_pct': 10,
   'scale_today.load_cut_pct': 10,
+  'band.sessions_per_step': 2,
 };
 const set = (settings, k) => (settings && settings[k] != null ? Number(settings[k]) : DEFAULTS[k]);
 
@@ -558,12 +599,13 @@ function findYourWeight({ loadType, weight, rating, muchEasier = false, lower = 
  * range: { lo, hi }   weekMode: 'build' | 'normal' | 'consolidate' | 'lighter' | 'light' | 'deload'
  * Returns { weight, action: 'find'|'increase'|'hold'|'decrease'|'progress-bodyweight'|'level-up-check', targetReps, note }
  */
-function suggestNext({ loadType, last, prevRating = null, range, ageBand, lower = false, weekMode = 'build',
+function suggestNext({ loadType, last, prevRating = null, older = null, range, ageBand, lower = false, weekMode = 'build',
   earlyFoundations = false, settings, available }) {
   const opts = { lower, ageBand, available };
   if (!last || !last.sets?.length) {
     return { weight: null, action: 'find', targetReps: range.hi, note: 'Find your weight: pick one you could lift about 12–15 times and do 10.' };
   }
+  if (loadType === 'band') return bandNext({ last, older, range, weekMode, settings });
   const reps = last.sets.map((s) => Number(s.reps) || 0);
   const w = last.weight;
   const allTop = reps.every((r) => r >= range.hi);
@@ -599,6 +641,47 @@ function suggestNext({ loadType, last, prevRating = null, range, ageBand, lower 
   return { weight: next, action: 'increase', targetReps: range.lo, note: 'Nice work. A little heavier this time.' };
 }
 
+/**
+ * Bands (backlog B3, Amanda packet Q8). A band step is a >30% jump, so she stays on a band longer and makes it harder
+ * with tempo first. Stages on one band: 0 = normal → 1 = lower for 3 seconds → 2 = lower for 3 seconds and pause for
+ * 1 second → next band at stage 0. Stage 0 moves on at the top of the range + 2 reps, stages 1–2 at the top of the
+ * range, all sets, rated Good or Easy, in `band.sessions_per_step` (2) sessions in a row at that band and stage.
+ * A band only drops after two sessions in a row below the range (or Hard twice), so it never flips straight back.
+ * last / older: her last two logs ({ weight, sets: [{reps}], rating, stage }), newest first.
+ */
+function bandNext({ last, older = null, range, weekMode = 'build', settings }) {
+  const w = last.weight;
+  const stage = last.stage ?? 0;
+  const reps = last.sets.map((x) => Number(x.reps) || 0);
+  const below = (l) => l && l.weight === w && l.sets.some((x) => (Number(x.reps) || 0) < range.lo);
+  const nextReps = Math.min(range.hi, Math.max(range.lo, Math.min(...reps) + 1));
+  const out = (o) => ({ weight: w, stage, targetReps: nextReps, ...o });
+  if ((below(last) && below(older)) || (last.rating === 'hard' && older?.rating === 'hard' && older.weight === w)) {
+    const down = step('band', w, -1);
+    if (down === w) return out({ action: 'hold', stage: 0, targetReps: range.lo, note: 'Same band, normal speed. Aim for smooth reps.' });
+    return { weight: down, stage: 0, action: 'decrease', targetReps: range.lo, note: 'A lighter band this time. That’s smart training.' };
+  }
+  if (below(last)) return out({ action: 'hold', targetReps: range.lo, note: 'Same band. Aim for the bottom of the range today.' });
+  if (['consolidate', 'lighter', 'light', 'deload'].includes(weekMode)) return out({ action: 'hold', note: 'Holding steady this week.' });
+  if (last.rating === 'hard') return out({ action: 'hold', note: 'Same band. Aim for smooth reps.' });
+  const target = stage === 0 ? range.hi + 2 : range.hi;
+  const met = (l) => l && l.weight === w && (l.stage ?? 0) === stage && (l.rating === 'good' || l.rating === 'easy')
+    && l.sets.length && l.sets.every((x) => (Number(x.reps) || 0) >= target);
+  const need = set(settings, 'band.sessions_per_step');
+  const hits = met(last) ? (need <= 1 || met(older) ? need : 1) : 0;
+  if (hits < need) {
+    return out({ action: 'hold', targetReps: stage === 0 ? Math.min(range.hi + 2, Math.max(range.lo, Math.min(...reps) + 1)) : nextReps,
+      note: stage === 0 ? 'Same band. A couple more reps, then we make it harder.' : BAND_TEMPO[stage] });
+  }
+  if (stage < 2) return { weight: w, stage: stage + 1, action: 'tempo', targetReps: range.lo, note: 'Same band, slower now.' };
+  const up = step('band', w, 1);
+  if (up === w) return out({ action: 'level-up-check', note: 'You’ve outgrown the heaviest band. Ready for the next level?' });
+  return { weight: up, stage: 0, action: 'increase', targetReps: range.lo, note: 'Next band up, normal speed again. Nice work.' };
+}
+
+/** How each band stage reads in the dose line. */
+const BAND_TEMPO = ['', 'Lower for 3 seconds on every rep.', 'Lower for 3 seconds and pause for 1 second at the hardest point.'];
+
 /** A load cut by pct (comebacks, §13), rounded down to a weight she can actually load. */
 function reduceLoad(loadType, weight, pct, opts = {}) {
   if (weight == null || loadType === 'bodyweight' || !pct) return weight;
@@ -609,7 +692,7 @@ function reduceLoad(loadType, weight, pct, opts = {}) {
 function scaleTodayWeight(loadType, weight, { settings, ...opts } = {}) {
   return reduceLoad(loadType, weight, set(settings, 'scale_today.load_cut_pct'), opts);
 }
-return { DB_STEPS, KB_STEPS, BAND_LABELS, DEFAULTS, step, roundDownToStep, findYourWeight, suggestNext, reduceLoad, scaleTodayWeight };
+return { DB_STEPS, KB_STEPS, BAND_LABELS, DEFAULTS, step, roundDownToStep, findYourWeight, suggestNext, bandNext, BAND_TEMPO, reduceLoad, scaleTodayWeight };
 })();
 
 // ── web/engine/session.js ──
@@ -623,7 +706,7 @@ const __session = (() => {
 
 const { LOWER_PATTERNS, addDays } = __util;
 const { slotDose, nextInQueue, adaptiveWeekMode } = __cycle;
-const { suggestNext, reduceLoad, BAND_LABELS } = __load;
+const { suggestNext, reduceLoad, BAND_LABELS, BAND_TEMPO } = __load;
 const { contextFor, eligible } = __resolve;
 const DONE = new Set(['done', 'partial']);
 
@@ -677,7 +760,7 @@ function workingSets(sets, measure) {
   const rows = (sets || []).map((s) => ({ weight: s.weight ?? null, reps: Number(measure === 'time' ? s.seconds : s.reps) || 0 }));
   if (!rows.length) return null;
   const w = rows[rows.length - 1].weight;
-  return { weight: w, sets: rows.filter((r) => r.weight === w).map(({ reps }) => ({ reps })) };
+  return { weight: w, sets: rows.filter((r) => r.weight === w).map(({ reps }) => ({ reps })), stage: Number(sets[sets.length - 1]?.stage ?? 0) };
 }
 
 /** Her last two non-skipped logs for one exercise (newest first) → suggestNext's {last, prevRating}. */
@@ -685,7 +768,9 @@ function lastPerformance(history, measure) {
   const usable = (history || []).filter((l) => !l.skipped && l.sets?.length);
   if (!usable.length) return { last: null, prevRating: null };
   const ws = workingSets(usable[0].sets, measure);
-  return { last: ws && { ...ws, rating: usable[0].rating ?? null }, prevRating: usable[1]?.rating ?? null };
+  const prev = usable[1] ? workingSets(usable[1].sets, measure) : null;
+  return { last: ws && { ...ws, rating: usable[0].rating ?? null }, prevRating: usable[1]?.rating ?? null,
+    older: prev && { ...prev, rating: usable[1].rating ?? null } };
 }
 
 /** How a weight reads to her. */
@@ -710,16 +795,17 @@ function firstNote(loadType, range, measure) {
  * lastWeight, suggestion {action, targetReps, note}.
  */
 function planSession(items, ctx) {
-  const { week, weekMode = 'build', cycleType, ageBand, dumbbells = [], comeback, history = {}, settings } = ctx;
+  const { week, weekMode = 'build', cycleType, cycleNo = null, ageBand, dumbbells = [], comeback, history = {}, settings } = ctx;
   return items.map((it) => {
     const ex = it.exercise;
     const measure = ex.measure === 'time' ? 'time' : 'reps';
     let dose = slotDose(it.slot, week, weekMode, settings);
+    if (seventyPlusCap({ ageBand, cycleNo, week, role: it.slot.role })) dose = { ...dose, sets: Math.min(dose.sets, 2) };
     if (comeback?.setDelta) dose = { ...dose, sets: Math.max(1, dose.sets + comeback.setDelta) };
     const range = measure === 'time' && dose.time ? dose.time : dose.reps;
-    const { last, prevRating } = lastPerformance(history[ex.id], measure);
+    const { last, prevRating, older } = lastPerformance(history[ex.id], measure);
     const s = suggestNext({
-      loadType: ex.load_type, last, prevRating, range, ageBand, weekMode, settings,
+      loadType: ex.load_type, last, prevRating, older, range, ageBand, weekMode, settings,
       lower: LOWER_PATTERNS.has(it.slot.pattern), earlyFoundations: cycleType === 'C1' && week <= 3,
       available: ex.load_type === 'dumbbell' && dumbbells.length ? dumbbells : undefined,
     });
@@ -731,10 +817,17 @@ function planSession(items, ctx) {
       weight = reduceLoad(ex.load_type, weight, comeback.loadCutPct, { ageBand, available: dumbbells.length ? dumbbells : undefined });
       note = 'Welcome back! A little lighter today so you can ease back in.';
     }
+    const stage = ex.load_type === 'band' ? (s.stage ?? 0) : 0;
     return { ...it, dose, range, measure, weight, last, lastWeight: last?.weight ?? null,
-      suggestion: { action: s.action, targetReps: s.targetReps, note } };
+      suggestion: { action: s.action, targetReps: s.targetReps, note, stage, tempo: BAND_TEMPO[stage] || null } };
   });
 }
+
+/**
+ * 70+ (Framework §11.2, backlog B15, Amanda packet Q17): primaries capped at 2 sets for her first 4 weeks (weeks 1–4
+ * of her first cycle).
+ */
+const seventyPlusCap = ({ ageBand, cycleNo, week, role }) => ageBand === '70+' && cycleNo === 1 && week <= 4 && role === 'P';
 
 /** Soreness hold (§10): where applySoreness marked holdLoad, don't add weight today. */
 function applyHold(items) {
@@ -766,7 +859,7 @@ function sessionSummary(exerciseLogs) {
   const done = exerciseLogs.filter((l) => !l.skipped && l.sets?.length);
   return { exercises: done.length, sets: done.reduce((n, l) => n + l.sets.length, 0), skipped: exerciseLogs.length - done.length };
 }
-return { sessionOrder, baseItems, weekStatus, trainedOn, weekWindow, weekModeFor, workingSets, lastPerformance, weightLabel, planSession, applyHold, lastTimeText, swapOptions, sessionSummary };
+return { sessionOrder, baseItems, weekStatus, trainedOn, weekWindow, weekModeFor, workingSets, lastPerformance, weightLabel, planSession, seventyPlusCap, applyHold, lastTimeText, swapOptions, sessionSummary };
 })();
 
 // ── web/engine/progress.js ──

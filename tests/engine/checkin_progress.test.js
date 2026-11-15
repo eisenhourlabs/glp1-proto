@@ -64,8 +64,8 @@ test('checkinActions: same area 3 times in 14 days → one pattern flag', () => 
 test('activeAdjustments and applyHoldAndTrim', () => {
   const adjustments = [{ type: 'hold_and_trim', detail: { sessions: 3, after_log_id: 2 } }, { type: 'lighter_week_next', detail: { week: 2 } }];
   const logs = [log(2, '2026-11-04', 1), log(3, '2026-11-06', 1), log(4, '2026-11-09', 2)];
-  assert.deepEqual(activeAdjustments({ adjustments, logs, week: 2 }), { holdAndTrim: true, lighterWeek: true });
-  assert.deepEqual(activeAdjustments({ adjustments, logs: [...logs, log(5, '2026-11-11', 2)], week: 3 }), { holdAndTrim: false, lighterWeek: false });
+  assert.deepEqual(activeAdjustments({ adjustments, logs, week: 2 }), { holdAndTrim: true, lighterWeek: true, extraSets: false });
+  assert.deepEqual(activeAdjustments({ adjustments, logs: [...logs, log(5, '2026-11-11', 2)], week: 3 }), { holdAndTrim: false, lighterWeek: false, extraSets: false });
   const items = [
     { slot: slot('SQ'), dose: { sets: 3 }, weight: 20, lastWeight: 15, suggestion: { action: 'increase' } },
     { slot: slot('HP', { role: 'S' }), dose: { sets: 2 }, weight: 10, lastWeight: 10, suggestion: { action: 'hold' } },

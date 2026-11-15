@@ -6,7 +6,7 @@ import { weekOfCycle, weekModeMessage } from '../engine/cycle.js';
 import { comebackMode } from '../engine/adherence.js';
 import { sessionOrder, weekStatus, trainedOn, weekWindow, weekModeFor } from '../engine/session.js';
 import { swapNote } from '../engine/resolve.js';
-import { activeAdjustments } from '../engine/checkin.js';
+import { activeAdjustments, extraSetsAllowed } from '../engine/checkin.js';
 import { loadContent, localToday } from './api.js';
 import { loadSettings, loadWarmups, cycleLogs, lastWorkout, flagsSince, startSession, sessionExerciseLogs, finishSession,
   discardSession, saveWeekMode, updateCycleStart, cycleAdjustments, skipToday, cycleProposal } from './log_api.js';
@@ -20,7 +20,7 @@ import { openSheet } from './workout_parts.js';
 import { SKIP_OPTIONS } from './session_copy.js';
 import { renderReview } from './review.js';
 import { addDays } from '../engine/util.js';
-import { homeState, comebackFrom } from '../engine/home_state.js';
+import { homeState, comebackFrom, restDaySuggested } from '../engine/home_state.js';
 
 const GOALS = {
   keep_muscle: 'Keep my muscle while I lose weight', everyday_strength: 'Make everyday life easier',
@@ -50,10 +50,12 @@ export async function renderHome(root, { patient, cycle, reload }) {
   const active = activeAdjustments({ adjustments: await cycleAdjustments(cycle.id), logs, week });
   const lighterByCheckin = active.lighterWeek && decision.mode === 'build';
   const weekMode = lighterByCheckin ? 'lighter' : decision.mode;
-  const comeback = comebackMode(comebackFrom(await lastWorkout(patient.id), cycle), today, settings);
+  const last = await lastWorkout(patient.id);
+  const comeback = comebackMode(comebackFrom(last, cycle), today, settings);
   const inProgress = logs.find((l) => l.status === 'in_progress' && l.log_date === today);
   const lastDone = [...logs].reverse().find((l) => DONE.has(l.status));
-  const env = { patient, cycle, content, settings, week, weekMode, comeback, holdAndTrim: active.holdAndTrim };
+  const env = { patient, cycle, content, settings, week, weekMode, comeback, holdAndTrim: active.holdAndTrim,
+    extraSets: active.extraSets && !active.holdAndTrim && extraSetsAllowed(weekMode) };
   const rerender = async () => { clear(root); await renderHome(root, { patient, cycle, reload }); window.scrollTo?.(0, 0); };
 
   // ── Cycle review (week 9 on, Framework §14) ──
@@ -124,7 +126,7 @@ export async function renderHome(root, { patient, cycle, reload }) {
 
   // ── Home screen: one notice at most (B11) ──
   const state = homeState({ rawWeek, weekComplete: status.complete, proposalReady: Boolean(proposal), comeback: comeback.mode,
-    weekMode: decision.mode, lighterByCheckin });
+    weekMode: decision.mode, lighterByCheckin, restDay: restDaySuggested(patient.age_band, last?.date, today) });
   const hero = h('section', { class: 'card hero' },
     h('p', { class: 'eyebrow' }, `${template.name} · ${state.label}`),
     h('h1', {}, rawWeek < 1 ? 'Your program' : state.complete ? 'Cycle complete' : 'This week'),
@@ -183,6 +185,7 @@ function noticeContent(state, { startsOn, nextNo, rawWeek, comeback, weekMode, l
     case 'comeback': return [h('p', {}, COMEBACK[comeback])];
     case 'week_mode': return [h('p', {}, lighterByCheckin && weekMode === 'build'
       ? 'This week is lighter so you can recharge. It still counts fully.' : weekModeMessage(weekMode))];
+    case 'rest_day': return [h('p', {}, 'You trained yesterday. A rest day in between helps your muscles get stronger, so today is a good day off. Your next workout is here whenever you’re ready.')];
     default: return [];
   }
 }

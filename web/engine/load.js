@@ -13,6 +13,7 @@ export const DEFAULTS = {
   'progression.double_jump_extra_reps': 3,
   'progression.drop_pct': 10,
   'scale_today.load_cut_pct': 10,
+  'band.sessions_per_step': 2,
 };
 const set = (settings, k) => (settings && settings[k] != null ? Number(settings[k]) : DEFAULTS[k]);
 
@@ -79,12 +80,13 @@ export function findYourWeight({ loadType, weight, rating, muchEasier = false, l
  * range: { lo, hi }   weekMode: 'build' | 'normal' | 'consolidate' | 'lighter' | 'light' | 'deload'
  * Returns { weight, action: 'find'|'increase'|'hold'|'decrease'|'progress-bodyweight'|'level-up-check', targetReps, note }
  */
-export function suggestNext({ loadType, last, prevRating = null, range, ageBand, lower = false, weekMode = 'build',
+export function suggestNext({ loadType, last, prevRating = null, older = null, range, ageBand, lower = false, weekMode = 'build',
   earlyFoundations = false, settings, available }) {
   const opts = { lower, ageBand, available };
   if (!last || !last.sets?.length) {
     return { weight: null, action: 'find', targetReps: range.hi, note: 'Find your weight: pick one you could lift about 12–15 times and do 10.' };
   }
+  if (loadType === 'band') return bandNext({ last, older, range, weekMode, settings });
   const reps = last.sets.map((s) => Number(s.reps) || 0);
   const w = last.weight;
   const allTop = reps.every((r) => r >= range.hi);
@@ -119,6 +121,47 @@ export function suggestNext({ loadType, last, prevRating = null, range, ageBand,
   if (next === w) return { weight: w, action: 'level-up-check', targetReps: range.hi, note: 'You’ve outgrown this weight. Ready for the next level?' };
   return { weight: next, action: 'increase', targetReps: range.lo, note: 'Nice work. A little heavier this time.' };
 }
+
+/**
+ * Bands (backlog B3, Amanda packet Q8). A band step is a >30% jump, so she stays on a band longer and makes it harder
+ * with tempo first. Stages on one band: 0 = normal → 1 = lower for 3 seconds → 2 = lower for 3 seconds and pause for
+ * 1 second → next band at stage 0. Stage 0 moves on at the top of the range + 2 reps, stages 1–2 at the top of the
+ * range, all sets, rated Good or Easy, in `band.sessions_per_step` (2) sessions in a row at that band and stage.
+ * A band only drops after two sessions in a row below the range (or Hard twice), so it never flips straight back.
+ * last / older: her last two logs ({ weight, sets: [{reps}], rating, stage }), newest first.
+ */
+export function bandNext({ last, older = null, range, weekMode = 'build', settings }) {
+  const w = last.weight;
+  const stage = last.stage ?? 0;
+  const reps = last.sets.map((x) => Number(x.reps) || 0);
+  const below = (l) => l && l.weight === w && l.sets.some((x) => (Number(x.reps) || 0) < range.lo);
+  const nextReps = Math.min(range.hi, Math.max(range.lo, Math.min(...reps) + 1));
+  const out = (o) => ({ weight: w, stage, targetReps: nextReps, ...o });
+  if ((below(last) && below(older)) || (last.rating === 'hard' && older?.rating === 'hard' && older.weight === w)) {
+    const down = step('band', w, -1);
+    if (down === w) return out({ action: 'hold', stage: 0, targetReps: range.lo, note: 'Same band, normal speed. Aim for smooth reps.' });
+    return { weight: down, stage: 0, action: 'decrease', targetReps: range.lo, note: 'A lighter band this time. That’s smart training.' };
+  }
+  if (below(last)) return out({ action: 'hold', targetReps: range.lo, note: 'Same band. Aim for the bottom of the range today.' });
+  if (['consolidate', 'lighter', 'light', 'deload'].includes(weekMode)) return out({ action: 'hold', note: 'Holding steady this week.' });
+  if (last.rating === 'hard') return out({ action: 'hold', note: 'Same band. Aim for smooth reps.' });
+  const target = stage === 0 ? range.hi + 2 : range.hi;
+  const met = (l) => l && l.weight === w && (l.stage ?? 0) === stage && (l.rating === 'good' || l.rating === 'easy')
+    && l.sets.length && l.sets.every((x) => (Number(x.reps) || 0) >= target);
+  const need = set(settings, 'band.sessions_per_step');
+  const hits = met(last) ? (need <= 1 || met(older) ? need : 1) : 0;
+  if (hits < need) {
+    return out({ action: 'hold', targetReps: stage === 0 ? Math.min(range.hi + 2, Math.max(range.lo, Math.min(...reps) + 1)) : nextReps,
+      note: stage === 0 ? 'Same band. A couple more reps, then we make it harder.' : BAND_TEMPO[stage] });
+  }
+  if (stage < 2) return { weight: w, stage: stage + 1, action: 'tempo', targetReps: range.lo, note: 'Same band, slower now.' };
+  const up = step('band', w, 1);
+  if (up === w) return out({ action: 'level-up-check', note: 'You’ve outgrown the heaviest band. Ready for the next level?' });
+  return { weight: up, stage: 0, action: 'increase', targetReps: range.lo, note: 'Next band up, normal speed again. Nice work.' };
+}
+
+/** How each band stage reads in the dose line. */
+export const BAND_TEMPO = ['', 'Lower for 3 seconds on every rep.', 'Lower for 3 seconds and pause for 1 second at the hardest point.'];
 
 /** A load cut by pct (comebacks, §13), rounded down to a weight she can actually load. */
 export function reduceLoad(loadType, weight, pct, opts = {}) {

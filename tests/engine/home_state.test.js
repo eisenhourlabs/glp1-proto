@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { homeState, cycleLabel, cycleComplete, comebackFrom } from '../../web/engine/home_state.js';
+import { homeState, cycleLabel, cycleComplete, comebackFrom, restDaySuggested } from '../../web/engine/home_state.js';
 import { comebackMode } from '../../web/engine/adherence.js';
 
 const base = { rawWeek: 3, weekComplete: false, proposalReady: false, comeback: 'none', weekMode: 'build', lighterByCheckin: false };
@@ -37,7 +37,7 @@ test('homeState: priority order, one notice only', () => {
 });
 
 test('homeState: every combination returns exactly one known notice', () => {
-  const known = new Set(['paused', 'upcoming', 'review_due', 'next_ready', 'comeback', 'week_mode', null]);
+  const known = new Set(['paused', 'upcoming', 'review_due', 'next_ready', 'comeback', 'week_mode', 'rest_day', null]);
   for (const paused of [false, true]) for (const rawWeek of [0, 1, 4, 8, 9, 10, 13])
     for (const weekComplete of [false, true]) for (const proposalReady of [false, true])
       for (const comeback of ['none', 'welcome_back', 'reentry', 'restart'])
@@ -88,4 +88,16 @@ test('comebackFrom: a real gap inside the old cycle still counts', () => {
 test('comebackFrom: last workout after the old cycle ended (late week-9 catch-up) and no idle time', () => {
   assert.equal(comebackFrom({ date: '2026-03-12', cycleStart: '2026-01-05' }, { start_date: '2026-03-12' }), '2026-03-12');
   assert.equal(comebackFrom({ date: '2026-03-12', cycleStart: '2026-01-05' }, { start_date: '2026-03-15' }), '2026-03-15');
+});
+
+test('B15: rest-day suggestion at 60+ the day after a workout, lowest priority', () => {
+  assert.equal(restDaySuggested('60-69', '2026-03-02', '2026-03-03'), true);
+  assert.equal(restDaySuggested('70+', '2026-03-02', '2026-03-03'), true);
+  assert.equal(restDaySuggested('50-59', '2026-03-02', '2026-03-03'), false, 'under 60');
+  assert.equal(restDaySuggested('60-69', '2026-03-03', '2026-03-03'), false, 'trained today: "done for today" instead');
+  assert.equal(restDaySuggested('60-69', '2026-03-01', '2026-03-03'), false);
+  assert.equal(restDaySuggested('60-69', null, '2026-03-03'), false);
+  assert.equal(notice({ restDay: true }), 'rest_day');
+  assert.equal(notice({ restDay: true, weekMode: 'consolidate', rawWeek: 4 }), 'week_mode');
+  assert.equal(notice({ restDay: true, comeback: 'welcome_back' }), 'comeback');
 });

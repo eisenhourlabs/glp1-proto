@@ -5,7 +5,7 @@ import { choices, primary, secondary } from '../shared/ui.js';
 import { swapNote } from '../engine/resolve.js';
 import { findYourWeight } from '../engine/load.js';
 import { swapOptions, weightLabel, lastTimeText } from '../engine/session.js';
-import { formatRange, LOWER_PATTERNS } from '../engine/util.js';
+import { formatRange, LOWER_PATTERNS, isSixtyPlus } from '../engine/util.js';
 import { saveExercise, finishSession, discardSession, raiseFlag } from './log_api.js';
 import { stepper, weightControl, restTimer, holdTimer, openSheet, dizzySheet } from './workout_parts.js';
 import { WARNING_SIGNS, HURTS, RATING_OPTIONS, EFFORT_CUE, BREATH_CUE, FAST_CUE, AREA_OPTIONS, areaName } from './session_copy.js';
@@ -64,7 +64,7 @@ export function runWorkout(root, w) {
     const wu = w.warmup;
     return h('section', { class: 'step' },
       h('h1', {}, 'Warm-up'),
-      h('p', { class: 'lead' }, 'About 5 minutes of easy movement. Follow along at your own pace.'),
+      h('p', { class: 'lead' }, `About ${isSixtyPlus(w.patient.age_band) ? 7 : 5} minutes of easy movement. Follow along at your own pace.`),
       wu ? h('ol', { class: 'card exlist warmup' }, wu.moves.map((m) => h('li', {},
         h('span', { class: 'exname' }, m.move), ' · ', h('span', {}, m.dose), m.cue ? h('span', { class: 'note' }, m.cue) : null))) : null,
       h('div', { class: 'actions' }, primary('Warm-up done', () => go(Math.max(0, states.findIndex((s) => !finished(s)))))));
@@ -116,6 +116,7 @@ export function runWorkout(root, w) {
           if (wc && (wt == null || Number.isNaN(wt) || wt <= 0)) { msg.textContent = 'Enter the weight you used.'; return; }
           const row = time ? { seconds: reps.get() } : { reps: reps.get() };
           if (wc) row.weight = wt;
+          if (item.suggestion.stage) row.stage = item.suggestion.stage;   // band tempo stage (B3), read back by the next suggestion
           weight = wt;
           st.sets.push(row);
           save(st);
@@ -154,7 +155,8 @@ export function runWorkout(root, w) {
       h('h1', {}, ex.name),
       note ? h('p', { class: 'note' }, note) : null,
       h('p', { class: 'target' }, target, suggested ? ` · ${suggested}` : ''),
-      h('p', { class: 'muted small' }, item.suggestion.note),
+      item.suggestion.tempo ? h('p', { class: 'tempo' }, item.suggestion.tempo) : null,
+      item.suggestion.note && item.suggestion.note !== item.suggestion.tempo ? h('p', { class: 'muted small' }, item.suggestion.note) : null,
       item.last ? h('p', { class: 'small muted' }, lastTimeText(ex.load_type, item.last, item.measure)) : null,
       h('details', { class: 'cues' }, h('summary', {}, 'How to do it'), h('ul', {}, cues.map((c) => h('li', {}, c)))),
       setsBox, after,

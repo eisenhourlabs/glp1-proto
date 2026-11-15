@@ -12,7 +12,7 @@ import { comebackMode } from '../../web/engine/adherence.js';
 import { comebackFrom } from '../../web/engine/home_state.js';
 import { planSession, applyHold, weekModeFor, weekWindow } from '../../web/engine/session.js';
 import { applyWorkarounds, applySoreness, scaleToday } from '../../web/engine/readiness.js';
-import { checkinActions, activeAdjustments, applyHoldAndTrim } from '../../web/engine/checkin.js';
+import { checkinActions, activeAdjustments, applyHoldAndTrim, primariesProgressing, extraSetSlots, applyExtraSets, extraSetsAllowed } from '../../web/engine/checkin.js';
 import { cycleSummary, defaultProposal, applyLevelChanges, slotsWithSwaps, levelCeilings } from '../../web/engine/review.js';
 import { validateProposal } from '../../web/engine/review_validate.js';
 import { addDays, daysBetween, LOWER_PATTERNS, isSixtyPlus } from '../../web/engine/util.js';
@@ -54,14 +54,14 @@ export function runPersona(p, content, { weeks = 30 } = {}) {
   const out = { persona: p, cycles: [], weeks: [], levelUps: [], violations: [], watch: [], notes: [] };
   const cap = new Map(); const hist = {}; const recent = {};
   const allLogs = []; const allExLogs = []; const flags = [];
-  let logId = 0; let curG = 1; let cycle = null; let cycleLogs = []; let cycleExLogs = []; let adjustments = []; let prevSore = [];
+  let logId = 0; let curG = 1; let weekRows = []; let cycle = null; let cycleLogs = []; let cycleExLogs = []; let adjustments = []; let prevSore = [];
 
   const startCycle = (type, start, { avoid = [], swaps = [], days = p.days } = {}) => {
     const perWeek = type === 'C1' && days === 4 ? 3 : days;
     const template = chooseTemplate(templates, { cycleType: type, daysPerWeek: perWeek, experienced: type !== 'C1' });
     if (!template) throw new Error(`${p.key}: no template for ${type} at ${perWeek} days`);
     const own = slotsWithSwaps(slots.filter((s) => s.template_id === template.template_id), swaps);
-    const plan = materializeCycle(template, own, profileOf(), library, { minutes: p.minutes, used: avoid });
+    const plan = materializeCycle(template, own, profileOf(), library, { minutes: p.minutes, used: avoid, ageBand: p.age_band, settings });
     cycle = { cycle_no: (cycle?.cycle_no ?? 0) + 1, cycle_type: type, template_id: template.template_id, start_date: start,
       session_minutes: p.minutes, week_modes: {}, template, plan, levels: { ...patient.pattern_levels },
       equipment: [...patient.equipment], dumbbells: [...me.dumbbells] };
@@ -100,7 +100,7 @@ export function runPersona(p, content, { weeks = 30 } = {}) {
   startCycle(startingCycle({ experience: p.experience, check: p.check || {} }), RUN_START);
 
   for (let g = 1; g <= weeks; g++) {
-    curG = g;
+    curG = g; weekRows = [];
     const weekStart = addDays(RUN_START, (g - 1) * 7);
     const ev = p.events?.[String(g)];
     if (ev) {
@@ -126,7 +126,7 @@ export function runPersona(p, content, { weeks = 30 } = {}) {
       wk.sessions.push(session({ ...s, letter: order[i] }, cw, d.mode, date));
     });
     wk.adjustments = adjustments.filter((a) => a.g === g).map(({ type, reason, detail }) => ({ type, reason, detail }));
-    const wc = weekChecks(wk, settings);
+    const wc = weekChecks(wk, settings, { ageBand: p.age_band });
     out.violations.push(...wc.violations);
     out.watch.push(...wc.watch);
     out.weeks.push(wk);
@@ -151,10 +151,15 @@ export function runPersona(p, content, { weeks = 30 } = {}) {
       const r = applyWorkarounds(items, areas, profile, library);
       items = r.items.filter((x) => x.exercise); swaps.push(...r.swaps);
     }
-    let plan = planSession(items, { week: cw, weekMode, cycleType: cycle.cycle_type, ageBand: p.age_band, dumbbells: cycle.dumbbells,
+    let plan = planSession(items, { week: cw, weekMode, cycleType: cycle.cycle_type, cycleNo: cycle.cycle_no, ageBand: p.age_band, dumbbells: cycle.dumbbells,
       comeback, history: hist, settings });
     plan = applyHold(applySoreness(plan, prevSore).items);
     if (active.holdAndTrim) plan = applyHoldAndTrim(plan);
+    const extra = active.extraSets && !active.holdAndTrim && extraSetsAllowed(weekMode);
+    if (extra) {
+      const bySession = Object.fromEntries(cycle.plan.sessions.map((x) => [x.session, x.items.filter((i) => i.exercise).map((i) => i.slot)]));
+      plan = applyExtraSets(plan, extraSetSlots(bySession, { week: cw, cycleType: cycle.cycle_type, settings }), s.letter);
+    }
     const scaled = Boolean(s.energy === 'low' && s.scale);
     if (scaled) plan = scaleToday(plan, settings);
     const lines = plan.map((it) => perform(it, s, cw, date));
@@ -167,15 +172,16 @@ export function runPersona(p, content, { weeks = 30 } = {}) {
       allExLogs.push(row); cycleExLogs.push(row);
     }
     if (s.pain) flags.push({ type: 'pain', detail: { session_log_id: log.id, area: s.pain }, date, created_at: `${date}T12:00:00Z`, cycle_no: cycle.cycle_no });
+    weekRows.push(...lines.map((l) => ({ role: l.role, rating: l.rating, skipped: false })));
     const act = checkinActions({ logs: cycleLogs, flags: flags.filter((f) => f.cycle_no === cycle.cycle_no), adjustments, cycle,
-      week: cw, perWeek: cycle.template.days_per_week, today: date, lastLogId: log.id, settings });
+      week: cw, perWeek: cycle.template.days_per_week, today: date, lastLogId: log.id, settings, primariesProgressing: primariesProgressing(weekRows) });
     adjustments.push(...act.adjustments.map((a) => ({ ...a, g: curG })));
     flags.push(...act.flags.map((f) => ({ ...f, date, created_at: `${date}T12:00:00Z`, cycle_no: cycle.cycle_no })));
-    const ctx = { cycle, profile, areas, ageBand: p.age_band, settings, cw };
+    const ctx = { cycle, profile, areas, ageBand: p.age_band, settings, cw };   // extra sets are allowed by line (extraSet flag)
     const checked = lines.map((l) => ({ ...l, checks: lineChecks(l, ctx) }));
     for (const l of checked) out.violations.push(...l.checks.map((c) => ({ ...c, cycle: cycle.cycle_no, date, slot: l.slot, exercise: l.id })));
     out.violations.push(...sessionChecks({ gapDays, comeback: comeback.mode, settings }).map((c) => ({ ...c, cycle: cycle.cycle_no, date })));
-    return { letter: s.letter, date, cw, weekMode, comeback: comeback.mode, scaled, holdAndTrim: active.holdAndTrim, lighterByCheckin, swaps,
+    return { letter: s.letter, date, cw, weekMode, comeback: comeback.mode, scaled, holdAndTrim: active.holdAndTrim, lighterByCheckin, extraSets: extra, swaps,
       checkin: { feel: log.feel, energy: log.energy, soreness: log.soreness, sore: log.sore_areas, areas: log.workaround_areas, pain: s.pain || null },
       triggered: act.adjustments.map((a) => `${a.type} (${a.reason})`), flagsRaised: act.flags.map((f) => f.detail?.reason ?? f.type),
       messages: act.messages, lines: checked };
@@ -207,7 +213,8 @@ export function runPersona(p, content, { weeks = 30 } = {}) {
       rating = hardDay ? 'hard' : r <= 0.85 || easyDay ? 'easy' : r <= 1.08 ? 'good' : 'hard';
       cap.set(ex.id, cap.get(ex.id) * (isSixtyPlus(p.age_band) ? 1.01 : 1.02));
     }
-    const setsLogged = Array.from({ length: sets }, () => (ex.measure === 'time' ? { weight: w, seconds: reps } : { weight: w, reps }));
+    const stage = it.suggestion.stage || undefined;
+    const setsLogged = Array.from({ length: sets }, () => (ex.measure === 'time' ? { weight: w, seconds: reps } : { weight: w, reps, stage }));
     hist[ex.id] = [{ skipped: false, rating, sets: setsLogged }, ...(hist[ex.id] || [])];
     if (it.slot.role === 'P' || it.slot.role === 'S') {
       (recent[ex.id] ||= []).push({ allTop: reps >= range.hi, rating });
@@ -220,7 +227,7 @@ export function runPersona(p, content, { weeks = 30 } = {}) {
     const label = w == null ? (ex.measure === 'time' ? '' : 'bodyweight') : ex.load_type === 'band' ? `${BAND_LABELS[w]} band` : `${w} lb`;
     return { slot: it.slot.slot, role: it.slot.role, pattern: it.slot.pattern, id: ex.id, name: ex.name, level: ex.level, load_type: ex.load_type,
       measure: ex.measure, exercise: ex, sets, written: it.slot, range: `${range.lo}-${range.hi}`, rir: it.dose.rir, weight: w, lastWeight: it.lastWeight ?? null,
-      weightLabel: label, found, reps, rating, setsLogged, action: it.suggestion.action, note: it.suggestion.note,
+      extraSet: Boolean(it.extraSet), weightLabel: label + (it.suggestion.tempo ? ` (${it.suggestion.tempo.replace(/ on every rep| at the hardest point/g, '').replace(/\.$/, '').toLowerCase()})` : ''), found, stage: stage ?? 0, reps, rating, setsLogged, action: it.suggestion.action, note: it.suggestion.note,
       swappedFor: it.swappedFor || null, soreArea: it.soreArea || null };
   }
 }

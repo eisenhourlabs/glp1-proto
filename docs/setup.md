@@ -119,6 +119,7 @@ node tests/browser/workout.smoke.mjs ../content.local.json [screenshot-dir]
 node tests/browser/admin.smoke.mjs ../content.local.json [screenshot-dir]
 node tests/browser/join.smoke.mjs ../content.local.json [screenshot-dir]
 node tests/browser/review.smoke.mjs ../content.local.json [screenshot-dir]
+node tests/browser/age60.smoke.mjs ../content.local.json [screenshot-dir]
 node tests/browser/demo.smoke.mjs ../content.local.json <content folder>/demo_seed.local.json [screenshot-dir]
 ```
 They run the real pages against an in-memory fake of Supabase (`tests/browser/fake_supabase.js`). For real QR codes in the staff-kit test: `npm i -g qrcode-generator@2.0.4`.
