@@ -65,6 +65,9 @@ Set `GLP1_CONTENT_DIR` in `.env` to the private content folder (the one holding 
 .\.venv\Scripts\python.exe scripts\import_content.py              # upload as a new content version and make it current
 ```
 Every import creates a **new content version**; patients keep the version their cycle started on. Close the workbook in Excel before importing.
+The equipment sheet's optional `only_setups` column (comma-separated setup ids) limits which setups onboarding lists an
+item for; blank = every setup. It needs migration 010 (`20261115001000_equipment_only_setups.sql`); the importer stops
+before uploading anything if that migration is missing.
 Settings rows are only added if missing (admin-tuned values are kept) unless `--reset-settings`.
 
 ## 8. Patient self-enrollment (the `enroll` Edge Function)

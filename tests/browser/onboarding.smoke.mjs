@@ -34,7 +34,20 @@ async function run(name, { redFlag, tz }) {
   await mq.nth(1).getByRole('button', { name: 'No', exact: true }).click();
   await mq.nth(2).getByRole('button', { name: 'Not sure', exact: true }).click();
   await btn('Continue').click();
+  // Equipment with only_setups (content v2) is listed only for those setups.
+  const only = (content.equipment || []).filter((e) => e.only_setups?.length);
+  const homeSetup = content.setups.find((st) => only.some((e) => !e.only_setups.includes(st.setup)));
+  if (homeSetup) {
+    await btn(homeSetup.label).click();
+    for (const e of only) {
+      const shown = await page.getByRole('button', { name: e.label, exact: true }).count();
+      if (shown !== (e.only_setups.includes(homeSetup.setup) ? 1 : 0)) fail(`${name}: ${e.code} shown=${shown} for ${homeSetup.setup}`);
+    }
+  } else if (name === 'happy') console.log('note: no equipment with only_setups in this content');
   await btn('Traditional / commercial gym').click(); await snap('05-where');
+  for (const e of only.filter((x) => x.only_setups.includes('commercial_gym'))) {
+    if (!(await page.getByRole('button', { name: e.label, exact: true }).count())) fail(`${name}: ${e.code} missing for the gym`);
+  }
   await btn('Continue').click();
   await btn('Knees').click(); await btn('I’d rather not').click(); await snap('06-workarounds');
   await btn('Continue').click();

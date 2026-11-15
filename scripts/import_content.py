@@ -34,7 +34,8 @@ def resolve_path(arg: str | None) -> Path:
 def rows_for_upload(c: dict, version: int) -> dict[str, list[dict]]:
     yn = lambda v: v == "Y"
     return {
-        "content_equipment": [{"version": version, "code": e["code"], "label": e["label"]} for e in c["equipment"]],
+        "content_equipment": [{"version": version, "code": e["code"], "label": e["label"],
+                               "only_setups": e.get("only_setups", [])} for e in c["equipment"]],
         "content_setups": [{"version": version, "setup": s["setup"], "label": s["label"], "level_ceiling": s["level_ceiling"],
                             "pattern_ceilings": s["pattern_ceilings"], "equipment": s["equipment"]} for s in c["setups"]],
         "content_exercises": [{
@@ -61,6 +62,11 @@ def rows_for_upload(c: dict, version: int) -> dict[str, list[dict]]:
 def upload(c: dict, path: Path, summary: dict, note: str | None, activate: bool, reset_settings: bool) -> None:
     from _env import admin_client
     db = admin_client()
+    try:  # migration 010 adds content_equipment.only_setups; stop before creating a half-filled version
+        db.table("content_equipment").select("only_setups").limit(1).execute()
+    except Exception:
+        sys.exit("The database is missing content_equipment.only_setups. Paste migration "
+                 "20261115001000_equipment_only_setups.sql in the SQL Editor first; nothing was uploaded.")
     v = db.table("content_versions").insert({
         "source_file": path.name, "source_hash": file_hash(path), "note": note, "summary": summary,
     }).execute().data[0]["version"]

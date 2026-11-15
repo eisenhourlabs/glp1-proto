@@ -60,7 +60,9 @@ async function whereYouTrain(ctx) {
   const paintEquip = () => {
     equipWrap.replaceChildren();
     if (!a.setup) return;
-    const codes = content.equipment.map((e) => e.code).filter((c) => c !== 'none');
+    // An item with only_setups (content v2) is offered for those setups only; keep anything she already ticked.
+    const codes = content.equipment.filter((e) => !e.only_setups?.length || e.only_setups.includes(a.setup)
+      || a.equipment.includes(e.code)).map((e) => e.code).filter((c) => c !== 'none');
     equipWrap.append(h('h2', {}, 'What do you have? Tap to change.'),
       choices({ multi: true, columns: 2, value: a.equipment, onChange: (v) => { a.equipment = v; paintDb(); },
         options: codes.map((c) => ({ value: c, label: label[c] })) }), dbWrap);
