@@ -58,5 +58,8 @@ scrolling, the dizzy control stays on screen. Not tested on a real phone with th
 ## Known gaps
 - Clinic accent colours are free choices; a very light accent would make the main button's white text hard to read. A contrast check when a
   clinic colour is set (admin) is not built.
-- The rest timer (`role="timer"`) and set steppers (`aria-live` on the value) have not been listened to on a real screen reader.
+- The rest timer (`role="timer"`) and set steppers (`aria-live` on the value) have not been listened to on a real screen reader
+  (C9, `docs/device_checks.md`). Fixed before that check (found while writing it): "Heavier"/"Lighter" now say the new weight
+  ("15 pounds"), and after "Done set" focus moves to the rest timer (or the next set, or "How did that feel?") instead of
+  being lost when the button leaves the page; after "Ready" it moves to the next set.
 - "Sign out moves into the menu" waits for the patient menu (A10).

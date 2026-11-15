@@ -4,13 +4,17 @@
 // lines carry role="status" (statusLine() in ui.js) and each new screen moves focus to its heading, which the screen
 // reader then announces. Focus is moved without scrolling; the caller scrolls to the top itself when it should.
 
+/** Move focus to `el` (made focusable by script, not by Tab) so a screen reader reads it. False when there is no el. */
+export function focusOn(el) {
+  if (!el?.focus) return false;
+  if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1');
+  el.focus({ preventScroll: true });
+  return true;
+}
+
 /** Put focus on the first heading in `scope` (h1, else h2) so a screen reader announces the new screen. */
 export function focusHeading(scope = document.getElementById('app')) {
-  const heading = scope?.querySelector?.('h1') ?? scope?.querySelector?.('h2');
-  if (!heading) return false;
-  if (!heading.hasAttribute('tabindex')) heading.setAttribute('tabindex', '-1');   // focusable by script, not by Tab
-  heading.focus({ preventScroll: true });
-  return true;
+  return focusOn(scope?.querySelector?.('h1') ?? scope?.querySelector?.('h2'));
 }
 
 /** A new screen is on show: back to the top, and announce it. Call after the screen's content is in the page. */

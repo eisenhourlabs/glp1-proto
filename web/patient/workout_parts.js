@@ -30,6 +30,7 @@ export function weightControl(loadType, value, { dumbbells = [], ageBand, lower 
   }
   const opts = { ageBand, lower, available: loadType === 'dumbbell' && dumbbells.length ? dumbbells : undefined };
   let v = value;
+  const said = h('span', { class: 'visually-hidden', role: 'status' });   // "Heavier" doesn't change, so say the new weight
   const input = h('input', { type: 'number', inputmode: 'decimal', min: 0, step: 'any', class: 'weight-input', placeholder: 'lb',
     'aria-label': 'Weight in pounds', value: v ?? '' });
   input.addEventListener('input', () => { v = input.value === '' ? null : Number(input.value); });
@@ -37,24 +38,29 @@ export function weightControl(loadType, value, { dumbbells = [], ageBand, lower 
     if (v == null) v = opts.available?.[0] ?? (loadType === 'dumbbell' ? 5 : loadType === 'kettlebell' ? 9 : 10);
     else v = stepWeight(loadType, v, n, opts);
     input.value = v;
+    said.textContent = `${v} pounds`;
   };
   const el = h('div', { class: 'stepper', role: 'group', 'aria-label': 'Weight' },
     h('button', { type: 'button', class: 'stepper-btn', 'aria-label': 'Lighter', onclick: () => move(-1) }, '−'),
     h('label', { class: 'weight-wrap' }, input, h('span', { class: 'unit' }, 'lb')),
-    h('button', { type: 'button', class: 'stepper-btn', 'aria-label': 'Heavier', onclick: () => move(1) }, '+'));
+    h('button', { type: 'button', class: 'stepper-btn', 'aria-label': 'Heavier', onclick: () => move(1) }, '+'), said);
   return { el, get: () => v, set: (x) => { v = x; input.value = x ?? ''; } };
 }
 
 const mmss = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
-/** Suggested rest (never enforced, §6). Calls onDone when she taps Ready or time runs out. */
+/**
+ * Suggested rest (never enforced, §6). Calls onDone({ hadFocus }) when she taps Ready or time runs out; hadFocus says
+ * whether focus was inside the timer (then the caller moves it on, since the timer leaves the page).
+ * The countdown is not a live region: a screen reader reads it when she moves to it, not every second.
+ */
 export function restTimer(seconds, onDone) {
   let left = seconds;
   const out = h('span', { class: 'rest-time' }, mmss(left));
-  const finish = () => { clearInterval(t); el.remove(); onDone?.(); };
+  const finish = () => { const hadFocus = el.contains(document.activeElement); clearInterval(t); el.remove(); onDone?.({ hadFocus }); };
   const t = setInterval(() => { left -= 1; out.textContent = mmss(Math.max(0, left)); if (left <= 0) finish(); }, 1000);
-  const el = h('div', { class: 'rest card soft', role: 'timer' },
-    h('div', {}, h('p', { class: 'small muted' }, 'Rest, sip some water'), out),
+  const el = h('div', { class: 'rest card soft', role: 'timer', 'aria-label': 'Rest timer' },
+    h('div', {}, h('p', { class: 'small muted rest-label' }, 'Rest, sip some water'), out),
     h('div', { class: 'row' },
       secondary('+30 s', () => { left += 30; out.textContent = mmss(left); }),
       primary('Ready', finish)));
