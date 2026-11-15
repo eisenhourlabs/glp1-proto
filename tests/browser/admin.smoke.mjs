@@ -125,6 +125,7 @@ await page.getByText('Worth a check-in call (1)').waitFor(); await snap('07-admi
 const db = await fakeDb(page);
 if (!db.tables.flags.find((f) => f.id === 1).resolved_by) fail('flag not resolved');
 if (!db.tables.clinic_codes.some((k) => k.code === 'NORTH-1')) fail('code not added');
+if (db.tables.clinics.find((c) => c.name === 'Northside Wellness')?.timezone !== 'America/Chicago') fail('new clinic should take the browser time zone');
 if (db.tables.app_settings.find((s) => s.key === 'scale_today.load_cut_pct').value !== 12) fail('setting not saved');
 if (db.tables.ai_proposals[0].status !== 'approved' || db.tables.ai_proposals[0].final.days_per_week !== 4) fail('approval should apply the AI plan');
 const rosa = db.tables.patients.find((p) => p.id === 'u2');
@@ -138,8 +139,27 @@ const tiles = await cv.page.locator('.stat').allTextContents();
 console.log(`clinic tiles: ${tiles.join(' | ')}`);
 if (!tiles.some((x) => /78%/.test(x))) fail('active % tile');
 if (!(await cv.page.getByText('14 of 17 patients').count())) fail('strength line');
+if (await cv.page.locator('[data-test="small-numbers"]').count()) fail('no small-numbers note for a 28-patient clinic');
 errors.push(...cv.errors);
 await cv.ctx.close();
+
+// Clinic viewer, small clinic (D8): counts under 5 come back null; no percentages or weekly rates.
+const small = { ...S, rpc: { ...S.rpc, clinic_report: { clinic: 'Lakeside Weight & Wellness', as_of: '2026-11-17', min_cell: 5, small_clinic: true,
+  enrolled: null, activated: null, active_now: null, active_7d: null, active_28d: null, workouts_28d: null, weekly: [],
+  strength: { patients_with_data: null, patients_stronger: null, avg_load_change_pct: null },
+  suppressed: ['enrolled', 'activated', 'active_now', 'active_7d', 'active_28d', 'strength'] } } };
+const sv = await openApp(browser, 'clinic-small', small, { shots, time: '2026-11-17T09:00:00' });
+await signIn(sv.page, { path: 'clinic/', email: 'clinic@demo' });
+await sv.page.getByText('Worth a check-in call (1)').waitFor(); await sv.snap('01-small');
+const smallTiles = (await sv.page.locator('.stat').allTextContents()).join(' | ');
+console.log(`small clinic tiles: ${smallTiles}`);
+if (!/<5\s*enrolled/.test(smallTiles)) fail('small clinic: enrolled should read "<5"');
+if (/%|null|NaN/.test(smallTiles)) fail('small clinic: no percentages or raw nulls');
+if (!(await sv.page.locator('[data-test="small-numbers"]').count())) fail('small clinic: privacy note');
+if (!(await sv.page.getByText('Weekly rates appear once 5').count())) fail('small clinic: weekly note');
+if (!(await sv.page.getByText('Fewer than 5 patients have tracked lifts').count())) fail('small clinic: strength note');
+errors.push(...sv.errors);
+await sv.ctx.close();
 
 await ctx.close(); await browser.close(); server.close();
 if (errors.length) { console.error(errors.join('\n')); process.exitCode = 1; }

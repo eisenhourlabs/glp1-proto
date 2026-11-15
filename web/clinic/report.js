@@ -7,16 +7,23 @@ import { SKIP_REASONS } from '../engine/report.js';
 
 const must = ({ data, error }) => { if (error) throw error; return data; };
 const day = (iso) => (iso ? new Date(`${iso}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—');
-const pct = (a, b) => (b ? Math.round((a / b) * 100) : null);
+const pct = (a, b) => (a != null && b ? Math.round((a / b) * 100) : null);
+// Small numbers (D8): clinic_report() returns null for a count of 1 to min_cell − 1 and lists it in "suppressed".
+const fewer = (r) => (r.min_cell ? `fewer than ${r.min_cell}` : '—');
+const count = (r, v) => (v == null ? fewer(r) : v);
+const tile = (r, v) => (v == null ? (r.min_cell ? `<${r.min_cell}` : '—') : v);
 
 /** @param {object} o { clinicId (admins only), today (ISO date) } */
 export async function renderClinicReport(root, { clinicId = null, today } = {}) {
   const args = { p_clinic: clinicId, ...(today ? { p_today: today } : {}) };
   const [r, list] = await Promise.all([db.rpc('clinic_report', args).then(must), db.rpc('clinic_checkin_list', args).then(must)]);
   const month = new Date(`${r.as_of}T12:00:00`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-  const perActive = r.active_28d ? (r.workouts_28d / r.active_28d / 4).toFixed(1) : '—';
+  const small = !!r.small_clinic;
+  const perActive = !small && r.active_28d && r.workouts_28d != null ? (r.workouts_28d / r.active_28d / 4).toFixed(1) : '—';
   const call = list.filter((x) => x.worth_a_call);
   const weeks = r.weekly || [];
+  const activePct = small ? null : pct(r.active_7d, r.active_now);
+  const hidden = (r.suppressed || []).length > 0 || small;
 
   root.append(
     h('section', { class: 'card hero' },
@@ -24,14 +31,18 @@ export async function renderClinicReport(root, { clinicId = null, today } = {}) 
         h('div', {}, h('p', { class: 'eyebrow' }, `Patient program · ${month}`), h('h1', {}, r.clinic)),
         primary('Print report', () => window.print(), { class: 'btn btn-primary no-print' })),
       h('div', { class: 'stats stats-4' },
-        stat(r.enrolled, 'enrolled'),
-        stat(r.activated, 'finished setup'),
-        stat(`${pct(r.active_7d, r.active_now) ?? '—'}${r.active_now ? '%' : ''}`, `active this week (${r.active_7d} of ${r.active_now})`),
+        stat(tile(r, r.enrolled), 'enrolled'),
+        stat(tile(r, r.activated), 'finished setup'),
+        stat(activePct == null ? '—' : `${activePct}%`, r.active_7d == null || r.active_now == null ? 'active this week' : `active this week (${r.active_7d} of ${r.active_now})`),
         stat(perActive, 'workouts per active patient per week')),
-      h('p', { class: 'small muted' }, `As of ${day(r.as_of)}. “Active” means at least one workout in the last 7 days.`)),
+      h('p', { class: 'small muted' }, `As of ${day(r.as_of)}. “Active” means at least one workout in the last 7 days.`),
+      hidden ? h('p', { class: 'small muted', 'data-test': 'small-numbers' }, small
+        ? `To protect patient privacy, counts under ${r.min_cell} are hidden and percentages appear once ${r.min_cell} or more patients have enrolled.`
+        : `To protect patient privacy, counts under ${r.min_cell} are shown as “<${r.min_cell}” or “${fewer(r)}”.`) : null),
 
     h('section', { class: 'card' },
       h('h2', {}, 'Workouts done vs planned, by week'),
+      !weeks.length ? h('p', { class: 'muted' }, small ? `Weekly rates appear once ${r.min_cell} or more patients have enrolled.` : 'No weeks yet.') :
       h('div', { class: 'bars', role: 'img', 'aria-label': 'Weekly adherence' }, weeks.map((w, i) => {
         const p = pct(w.completed, w.planned);
         const current = i === weeks.length - 1;
@@ -40,12 +51,14 @@ export async function renderClinicReport(root, { clinicId = null, today } = {}) 
           h('span', { class: 'bar-val' }, p == null ? '—' : `${p}%`),
           h('span', { class: 'bar-label' }, current ? 'This wk' : day(w.week_start)));
       })),
-      h('p', { class: 'small muted' }, 'Completed ÷ planned workouts for patients who had started by that week. This week is so far.')),
+      weeks.length ? h('p', { class: 'small muted' }, 'Completed ÷ planned workouts for patients who had started by that week. This week is so far.') : null),
 
     h('section', { class: 'card' },
       h('h2', {}, 'Getting stronger'),
-      r.strength?.patients_with_data
-        ? h('p', {}, `${r.strength.patients_stronger} of ${r.strength.patients_with_data} patients with tracked lifts are lifting more than when they started`,
+      r.strength && r.strength.patients_with_data == null && r.min_cell
+        ? h('p', { class: 'muted' }, `Fewer than ${r.min_cell} patients have tracked lifts so far. Strength results appear at ${r.min_cell}.`)
+      : r.strength?.patients_with_data
+        ? h('p', {}, `${count(r, r.strength.patients_stronger)} of ${r.strength.patients_with_data} patients with tracked lifts are lifting more than when they started`,
           r.strength.avg_load_change_pct != null ? ` (average change ${r.strength.avg_load_change_pct > 0 ? '+' : ''}${r.strength.avg_load_change_pct}%).` : '.')
         : h('p', { class: 'muted' }, 'Strength trends appear once patients have a few weeks of workouts.')),
 
