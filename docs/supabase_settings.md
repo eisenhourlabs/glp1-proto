@@ -22,5 +22,7 @@ Everything in the hosted project that is **not** in a migration. Re-apply this l
 | | `ai-cycle-review` | Deployed from `supabase/functions/ai-cycle-review/index.ts` (generated: `node scripts/build_functions.mjs`), same steps as `enroll`. **Verify JWT: Off** (it checks the caller's session itself) | End-of-cycle AI review (Framework §14) |
 | | Secrets | `ANTHROPIC_API_KEY` (Anthropic Console → API keys). Optional `GLP1_AI_MODEL` (default `claude-sonnet-5-5`) | Without the key every review uses the standard plan, so nothing breaks. Later: VAPID keys |
 | Database → `app_settings` | `ai.coach_brief` | Loaded by `scripts/import_ai_brief.py` from the private content folder | Extra judgment and voice guidance for the AI; hard rules stay in code |
+| Database → `app_settings` | `report.min_cell` | **Not set** (default 5, migration 009) | Clinic reports hide any patient count of 1–4 ("fewer than 5") and show no percentages for a clinic under 5 patients. To change it, insert the row in the SQL Editor: `insert into public.app_settings (key, value) values ('report.min_cell', '5');` |
+| Database → `clinics.timezone` | Per clinic | Existing clinics `America/Chicago` (migration 008); new clinics take the admin's browser zone | Clinic reports count "today" in this zone. Change one with `update public.clinics set timezone = 'America/New_York' where name = '…';` |
 | Database | Extensions | defaults (`pgcrypto`, `pg_cron` later) | |
 | Billing | Plan | Free (pauses after ~7 days idle; unpause in the dashboard) | **Pilot:** Pro (backups) in Brad's org |

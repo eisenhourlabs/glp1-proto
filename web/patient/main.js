@@ -2,7 +2,7 @@
 import { mountShell, signOutButton } from '../shared/shell.js';
 import { h, clear } from '../shared/dom.js';
 import { CONFIG } from '../config.js';
-import { loadPatient, activeCycle, loadContent, createFirstCycle } from './api.js';
+import { loadPatient, savePatient, activeCycle, loadContent, createFirstCycle } from './api.js';
 import { runOnboarding } from './onboarding.js';
 import { renderPaused } from './paused.js';
 import { renderHome } from './home.js';
@@ -25,6 +25,7 @@ mountShell({
           body.append(h('section', { class: 'card' }, h('h1', {}, 'Almost there'), h('p', {}, 'Your program isn’t set up yet. Please contact your clinic.')));
           return;
         }
+        syncTimezone(profile.id, patient);
         if (patient.status === 'onboarding') return runOnboarding(body, { profile, patient, onDone: route });
         if (patient.status === 'paused' && patient.screening_flag === 'pause') return renderPaused(body, { profile, onDone: route });
         if (patient.status === 'paused' || patient.status === 'inactive') {
@@ -43,3 +44,13 @@ mountShell({
     await route();
   },
 });
+
+/** Keep patients.timezone in step with her browser (A16). Only once migration 008 has added the column; never blocks. */
+function syncTimezone(uid, patient) {
+  if (!('timezone' in patient)) return;
+  let tz = null;
+  try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { /* old browser */ }
+  if (!tz || tz === patient.timezone) return;
+  patient.timezone = tz;
+  savePatient(uid, { timezone: tz }).catch((e) => console.warn('time zone not saved', e));
+}

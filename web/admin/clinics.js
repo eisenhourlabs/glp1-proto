@@ -24,7 +24,7 @@ export async function renderClinics(root) {
       if (name.value.trim().length < 2) { msg.textContent = 'Enter a clinic name.'; return; }
       msg.textContent = 'Saving…';
       try {
-        await createClinic({ name: name.value.trim(), short_name: short.value.trim() || null, accent_color: accent.value, is_demo: demo.checked });
+        await createClinic({ name: name.value.trim(), short_name: short.value.trim() || null, accent_color: accent.value, is_demo: demo.checked, ...browserZone() });
         await refresh();
       } catch (e) { console.error(e); msg.textContent = e.message?.includes('duplicate') ? 'That name is taken.' : 'Couldn’t save.'; }
     }), msg);
@@ -71,4 +71,9 @@ function clinicCard(c, refresh) {
       catch (e) { console.error(e); msg.textContent = e.message?.includes('duplicate') ? 'That code is already used.' : 'Couldn’t add the code.'; }
     })),
     msg);
+}
+
+/** New clinics take the admin's browser time zone (A16); the database default (America/Chicago) otherwise. */
+function browserZone() {
+  try { const tz = Intl.DateTimeFormat().resolvedOptions().timeZone; return tz ? { timezone: tz } : {}; } catch { return {}; }
 }

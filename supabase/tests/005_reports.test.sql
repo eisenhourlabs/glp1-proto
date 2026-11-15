@@ -3,6 +3,8 @@
 -- admins name a clinic; patients get nothing; admin status changes are logged.
 
 -- fixtures (superuser). State from 004: a1 (clinic A) active, consented, one workout on 2026-11-02; b1 (clinic B).
+-- Small-number hiding (009, D8) is switched off here so the counts below stay visible; 009's test switches it on.
+insert into public.app_settings (key, value) values ('report.min_cell', '1') on conflict (key) do update set value = excluded.value;
 update public.profiles set role = 'patient' where id = '00000000-0000-0000-0000-0000000000a2';   -- 001 made her a viewer
 insert into public.patients (id, status, days_per_week, start_date) values ('00000000-0000-0000-0000-0000000000a2', 'active', 2, '2026-11-02');
 update public.patients set status = 'active', days_per_week = 3, start_date = '2026-11-02' where id = '00000000-0000-0000-0000-0000000000b1';

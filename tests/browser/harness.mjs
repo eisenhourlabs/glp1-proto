@@ -36,7 +36,7 @@ export function seed(content, patient = {}) {
       clinics: [{ id: 'c1', name: 'Lakeside Weight & Wellness', accent_color: '#7a4fb0', status: 'active' }],
       profiles: [{ id: 'u1', role: 'patient', clinic_id: 'c1', display_name: 'Dana', is_demo: true }],
       patients: [{ id: 'u1', status: 'onboarding', screening_flag: 'none', equipment: [], workarounds: [], restrictions: [], preferred_days: [],
-        pattern_levels: {}, workout1_check: {}, dumbbells_available: [], floor_ok: false, ...patient }],
+        pattern_levels: {}, workout1_check: {}, dumbbells_available: [], floor_ok: false, timezone: null, ...patient }],
       app_settings: Object.entries(content.settings || {}).map(([key, value]) => ({ key, value })),
       content_exercises: v(content.library), content_templates: v(content.templates), content_slots: v(content.slots),
       content_setups: v(content.setups), content_equipment: v(content.equipment), content_warmups: v(content.warmups || []),
@@ -45,9 +45,9 @@ export function seed(content, patient = {}) {
 }
 
 /** A fresh browser context with the fake backend; returns { ctx, page, btn, snap, errors }. */
-export async function openApp(browser, name, seedData, { shots, time } = {}) {
+export async function openApp(browser, name, seedData, { shots, time, tz = 'America/Chicago' } = {}) {
   const errors = [];
-  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, timezoneId: tz });
   await ctx.addInitScript((s) => { window.__FAKE_SEED__ = s; }, seedData);
   await ctx.route('https://cdn.jsdelivr.net/**', (r) => r.fulfill({ contentType: 'text/javascript', body: r.request().url().includes('qrcode-generator') ? QR : FAKE }));
   const page = await ctx.newPage();

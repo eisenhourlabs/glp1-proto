@@ -11,8 +11,8 @@ const errors = [];
 const fail = (m) => { console.error('FAIL:', m); process.exitCode = 1; };
 const browser = await chromium.launch();
 
-async function run(name, { redFlag }) {
-  const { ctx, page, btn, snap, errors: errs } = await openApp(browser, name, seed(content), { shots });
+async function run(name, { redFlag, tz }) {
+  const { ctx, page, btn, snap, errors: errs } = await openApp(browser, name, seed(content), { shots, tz });
   await signIn(page);
   await page.getByText('Setting up takes about 5 minutes').waitFor(); await snap('01-welcome');
   await btn('Let’s start').click();
@@ -61,6 +61,7 @@ async function run(name, { redFlag }) {
   console.log(`${name}: status=${p.status} docs=${docs} template=${db.tables.cycles[0]?.template_id} items=${items.length} ` +
     `levels SQ=${p.pattern_levels.SQ} HP=${p.pattern_levels.HP} restrictions=${p.restrictions} workarounds=${p.workarounds}`);
   if (p.status !== 'active') fail(`${name}: not active`);
+  if (p.timezone !== tz) fail(`${name}: time zone ${p.timezone}, expected ${tz} from the browser`);
   if (redFlag !== docs.includes('clearance')) fail(`${name}: clearance doc mismatch`);
   if (!db.tables.cycles.length || items.length < 15) fail(`${name}: cycle not built`);
   if (knees.length) fail(`${name}: knee-heavy exercise despite work-around: ${knees.map((e) => e.id)}`);
@@ -69,8 +70,8 @@ async function run(name, { redFlag }) {
   await ctx.close();
 }
 
-await run('happy', { redFlag: false });
-await run('redflag', { redFlag: true });
+await run('happy', { redFlag: false, tz: 'America/Chicago' });
+await run('redflag', { redFlag: true, tz: 'America/Denver' });
 await browser.close(); server.close();
 if (errors.length) { console.error(errors.join('\n')); process.exitCode = 1; }
 console.log(process.exitCode ? 'SMOKE FAILED' : 'SMOKE PASSED');
