@@ -107,6 +107,9 @@ git pull                                                   # get merged changes
 .\.venv\Scripts\python.exe scripts\import_content.py         # after editing the workbook
 ```
 
+## Persona speed-run (developer machine with Node)
+See `docs/speedrun.md`: made-up patients through the real engine for 30 weeks, checked against the Framework rules.
+
 ## Browser smoke tests (developer machine with Node + Playwright)
 Not part of `npm test`: they need Chromium and the private content export.
 ```
