@@ -57,29 +57,46 @@ function load() {
 const S = load();
 const browser = await chromium.launch();
 const errors = [];
-async function as(who, path, name, check) {
-  const app = await openApp(browser, name, S, { shots, time: `${TODAY}T09:00:00` });
+async function as(who, path, name, check, today = TODAY) {
+  const app = await openApp(browser, name, S, { shots, time: `${today}T09:00:00` });
   await signIn(app.page, { path, email: `${who}@glp1demo.example` });
   await check(app);
   errors.push(...app.errors);
   await app.ctx.close();
 }
 
+// B11: the home screen shows one notice at most, and never a welcome-back just because the cycle ended.
+async function oneNotice(page, who, expected) {
+  const notices = await page.locator('.hero [data-notice]').evaluateAll((els) => els.map((e) => e.dataset.notice));
+  if (notices.length > 1 || (notices[0] ?? null) !== expected) fail(`${who}: notices ${JSON.stringify(notices)}, expected ${expected}`);
+  if (await page.getByText('Welcome back').count() && expected !== 'comeback') fail(`${who}: unexpected welcome-back`);
+}
+
 await as('dana', '', 'demo-dana', async ({ page, snap }) => {
   await page.getByText('Week 9: time for your cycle review').waitFor(); await snap('home');
+  await oneNotice(page, 'dana', 'review_due');
   await page.getByRole('button', { name: 'Your cycle review' }).click();
   await page.getByText('Your Cycle 1 review').waitFor(); await snap('review');
   const stats = await page.locator('.stat').allTextContents();
   console.log(`Dana review: ${stats.join(' | ')}`);
 });
+// Two weeks later with nothing logged (the demo's dates drifting): week 9 is over, so "Cycle complete", one notice.
+await as('dana', '', 'demo-dana-later', async ({ page, snap }) => {
+  await page.getByText('You’ve finished this cycle!').waitFor(); await snap('home');
+  await oneNotice(page, 'dana later', 'review_due');
+  const eyebrow = await page.locator('.hero .eyebrow').textContent();
+  if (!/Cycle complete/.test(eyebrow) || /Week 9 of 9/.test(eyebrow)) fail(`dana later: eyebrow "${eyebrow}"`);
+}, addDays(TODAY, 14));
 await as('lisa', '', 'demo-lisa', async ({ page, snap }) => {
   await page.getByText('Welcome back! Today is a little lighter').waitFor(); await snap('home');
+  await oneNotice(page, 'lisa', 'comeback');
 });
 await as('maria', '', 'demo-maria', async ({ page, snap }) => {
   await page.getByText('This week’s workouts').waitFor();
   const eyebrow = await page.locator('.hero .eyebrow').textContent();
   console.log(`Maria: ${eyebrow}`);
   if (!/2 days · Week 5 of 9/.test(eyebrow)) fail('Maria should be in week 5 of a 2-day plan');
+  if (await page.locator('.hero [data-notice]').count() > 1) fail('maria: more than one notice');
   await snap('home');
 });
 // The clinic dashboard runs SQL report functions the fake can't; its numbers were checked against real Postgres.

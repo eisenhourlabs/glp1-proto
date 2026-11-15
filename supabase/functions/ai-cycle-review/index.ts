@@ -88,11 +88,17 @@ function eligible(ex, ctx, ignore = {}) {
   return true;
 }
 
-function rank(slot, used) {
+/**
+ * Sort order for eligible exercises. B2: the template's prefer_ids only count among exercises at the top level
+ * available to her for this slot (her target level, or the highest that fits when equipment, restrictions or
+ * work-arounds rule her level out), so a preferred exercise below her level never wins on preference.
+ * Variety within the week still comes before level, as before.
+ */
+function rank(slot, used, top) {
   const prefer = slot.prefer_ids || [];
-  const pIdx = (id) => { const i = prefer.indexOf(id); return i === -1 ? Infinity : i; };
+  const pIdx = (e) => { const i = e.level === top ? prefer.indexOf(e.id) : -1; return i === -1 ? Infinity : i; };
   return (a, b) =>
-    (pIdx(a.id) - pIdx(b.id)) ||                                   // template preference first
+    (pIdx(a) - pIdx(b)) ||                                         // template preference, at her level only
     ((used.has(a.id) ? 1 : 0) - (used.has(b.id) ? 1 : 0)) ||      // something not already in this week
     (b.level - a.level) ||                                         // highest level she's ready for
     a.id.localeCompare(b.id);                                      // stable
@@ -120,8 +126,11 @@ function resolveSlot(slot, profile, library, opts = {}) {
   const used = opts.used ?? new Set();
   const ctx = contextFor(slot, profile, opts);
   const pool = library.filter((e) => e.pattern === slot.pattern);
-  const order = rank(slot, used);
-  const pick = (ignore) => pool.filter((e) => eligible(e, ctx, ignore)).sort(order)[0] ?? null;
+  const pick = (ignore) => {
+    const ok = pool.filter((e) => eligible(e, ctx, ignore));
+    const top = Math.max(0, ...ok.map((e) => e.level));
+    return ok.sort(rank(slot, used, top))[0] ?? null;
+  };
 
   const chosen = pick({});
   if (!chosen) return { exercise: null, level: ctx.level, reasons: [{ type: 'no-option' }] };

@@ -1,0 +1,57 @@
+// What the home screen leads with (backlog B11). Exactly one notice, picked by priority:
+//   paused → not started yet → review due → next cycle ready → comeback → week-mode note → none.
+// Also the cycle label ("Week 3 of 9" / "Cycle complete") and the gap a comeback is measured over.
+
+import { addDays, daysBetween } from './util.js';
+
+export const CYCLE_WEEKS = 9;
+const CYCLE_DAYS = CYCLE_WEEKS * 7;
+
+/**
+ * The cycle is complete once week 9 has ended, or every week-9 workout is done.
+ * rawWeek: weekOfCycle() (0 before the start, 10+ after week 9); weekComplete: all of this week's workouts done.
+ */
+export const cycleComplete = (rawWeek, weekComplete) => rawWeek > CYCLE_WEEKS || (rawWeek === CYCLE_WEEKS && Boolean(weekComplete));
+
+/** Eyebrow label for the cycle: "Week N of 9", or "Cycle complete" after week 9. */
+export function cycleLabel(rawWeek, weekComplete) {
+  if (cycleComplete(rawWeek, weekComplete)) return 'Cycle complete';
+  return `Week ${Math.min(Math.max(rawWeek, 1), CYCLE_WEEKS)} of ${CYCLE_WEEKS}`;
+}
+
+/**
+ * The date a comeback gap is measured from (Framework §13). Days with no workouts to do (after her last
+ * cycle ended and before the next one started, i.e. waiting on the review) are not a gap, so the last
+ * workout date is moved forward by that many days.
+ * last: { date, cycleStart } of her last completed workout (cycleStart = start date of the cycle it was in), or null.
+ * current: { start_date } of the active cycle.
+ */
+export function comebackFrom(last, current) {
+  if (!last?.date) return null;
+  if (!last.cycleStart || !current?.start_date || last.cycleStart === current.start_date) return last.date;
+  const ended = addDays(last.cycleStart, CYCLE_DAYS);
+  const idleFrom = last.date > ended ? last.date : ended;
+  const idle = Math.max(0, daysBetween(idleFrom, current.start_date));
+  return addDays(last.date, idle);
+}
+
+/**
+ * The one notice the home screen shows.
+ * input: { paused, rawWeek, weekComplete, proposalReady, comeback: 'none'|'welcome_back'|'reentry'|'restart',
+ *          weekMode, lighterByCheckin }
+ * @returns {{notice: 'paused'|'upcoming'|'review_due'|'next_ready'|'comeback'|'week_mode'|null,
+ *            complete: boolean, label: string}}
+ *   complete: the cycle has ended (review notices use it to say "You've finished this cycle").
+ */
+export function homeState({ paused = false, rawWeek, weekComplete = false, proposalReady = false, comeback = 'none',
+  weekMode = 'build', lighterByCheckin = false }) {
+  const complete = cycleComplete(rawWeek, weekComplete);
+  const label = cycleLabel(rawWeek, weekComplete);
+  const out = (notice) => ({ notice, complete, label });
+  if (paused) return out('paused');
+  if (rawWeek < 1) return out('upcoming');
+  if (rawWeek >= CYCLE_WEEKS) return out(proposalReady ? 'next_ready' : 'review_due');
+  if (comeback && comeback !== 'none') return out('comeback');
+  if (lighterByCheckin || (weekMode && weekMode !== 'build')) return out('week_mode');
+  return out(null);
+}

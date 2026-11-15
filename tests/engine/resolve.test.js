@@ -54,9 +54,30 @@ test('resolveSlot respects restrictions and says so', () => {
   assert.equal(r.reasons[0].type, 'restriction');
 });
 
-test('prefer_ids win over level (light hinge slot)', () => {
+test('her level beats prefer_ids (B2): a preferred exercise below her level loses to one at her level', () => {
   const r = resolveSlot(slot('HI', { prefer: ['HI05', 'HI01'] }), { equipment: GYM, patternLevels: { HI: 3 } }, LIBRARY);
-  assert.equal(r.exercise.id, 'HI05');
+  assert.equal(r.exercise.level, 3, 'level 3 hinge, not the preferred level-2 / level-1 picks');
+  assert.ok(!['HI05', 'HI01'].includes(r.exercise.id));
+});
+
+test('prefer_ids choose among exercises at her level', () => {
+  const r = resolveSlot(slot('HI', { prefer: ['HI09', 'HI07'] }), { equipment: GYM, patternLevels: { HI: 3 }, floorOk: true }, LIBRARY);
+  assert.equal(r.exercise.id, 'HI09');
+  const r2 = resolveSlot(slot('HI', { prefer: ['HI05', 'HI01'] }), { equipment: GYM, patternLevels: { HI: 2 } }, LIBRARY);
+  assert.equal(r2.exercise.id, 'HI05', 'preferred and at her level');
+});
+
+test('when her level is ruled out, prefer_ids count at the highest level that fits', () => {
+  // Level 3, but bend_load restricted and no floor: HI07 and HI09 are out; HI05 (level 2) is the top that fits.
+  const profile = { equipment: GYM, patternLevels: { HI: 3 }, restrictions: ['bend_load', 'floor'] };
+  assert.equal(resolveSlot(slot('HI', { prefer: ['HI01', 'HI05'] }), profile, LIBRARY).exercise.id, 'HI05', 'level-1 pick loses');
+  assert.equal(resolveSlot(slot('HI', { prefer: ['HI05', 'HI01'] }), profile, LIBRARY).exercise.id, 'HI05');
+});
+
+test('variety in the week still comes before level', () => {
+  const used = new Set(['SQ07']);
+  const r = resolveSlot(slot('SQ'), { equipment: GYM, patternLevels: { SQ: 3 } }, LIBRARY, { used });
+  assert.notEqual(r.exercise.id, 'SQ07');
 });
 
 test('levelDelta (make it easier) drops one level', () => {
