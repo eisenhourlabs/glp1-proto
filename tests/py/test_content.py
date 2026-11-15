@@ -20,13 +20,18 @@ def ex_row(id, pattern, level, equip="none", load="bodyweight", floor="N", restr
             "needed", "", "Y", ""]
 
 
-def make_workbook(path, exercises, slots=None):
+def make_workbook(path, exercises, slots=None, only=None):
     from openpyxl import Workbook
     wb = Workbook()
     ws = wb.active; ws.title = "exercises"; ws.append(EX_HEAD)
     for r in exercises: ws.append(r)
-    ws = wb.create_sheet("equipment"); ws.append(["code", "label"])
-    for c in ("none", "chair", "db", "bench", "bb"): ws.append([c, c])
+    ws = wb.create_sheet("equipment")
+    if only is None:
+        ws.append(["code", "label"])
+        for c in ("none", "chair", "db", "bench", "bb"): ws.append([c, c])
+    else:  # optional only_setups column (content v2)
+        ws.append(["code", "label", "only_setups"])
+        for c in ("none", "chair", "db", "bench", "bb"): ws.append([c, c, only.get(c, "")])
     ws = wb.create_sheet("setups"); ws.append(["setup", "label", "level_ceiling", "pattern_ceiling_exceptions", "none", "chair", "db", "bench", "bb"])
     ws.append(["home", "Home", 2, "", "Y", "Y", "Y", "", ""])
     ws = wb.create_sheet("templates"); ws.append(["template_id", "cycle_type", "days_per_week", "name", "sessions", "entry_rule", "version", "active"])
@@ -57,6 +62,17 @@ class ModelTests(unittest.TestCase):
         self.assertEqual(rows["content_exercises"][0]["version"], 7)
         self.assertIs(rows["content_exercises"][0]["floor"], False)
         self.assertEqual(rows["content_slots"][0]["sets_by_week"], [2, 2, 3, 3, 3, 3, 3, 3])
+        self.assertEqual(rows["content_equipment"][0]["only_setups"], [])  # no column = offered everywhere
+
+    def test_only_setups_column(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "w.xlsx"
+            make_workbook(p, [ex_row("SQ01", "SQ", 1, "chair")], only={"bb": "gym, home"})
+            c = load_workbook_content(p)
+        eq = {e["code"]: e["only_setups"] for e in c["equipment"]}
+        self.assertEqual(eq["bb"], ["gym", "home"])
+        self.assertEqual(eq["db"], [])
+        self.assertEqual(rows_for_upload(c, 1)["content_equipment"][4]["only_setups"], ["gym", "home"])
 
 
 class RuleTests(unittest.TestCase):
@@ -85,6 +101,15 @@ class RuleTests(unittest.TestCase):
         text = "\n".join(self._errors([ex_row("SQ01", "SQ", 1, "chair")], bad))
         for needle in ("sets_by_week needs 8 values", "RIR below 2", "prefer id HI01 doesn't exist", "pair_with S9"):
             self.assertIn(needle, text)
+
+    def test_only_setups_rules(self):
+        lib = [ex_row("SQ01", "SQ", 1, "chair")]
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "w.xlsx"
+            make_workbook(p, lib, only={"bb": "nowhere", "db": "gym"})   # unknown setup; home has db marked Y
+            text = "\n".join(validate(load_workbook_content(p))[0])
+        self.assertIn("equipment bb: only_setups names unknown setup(s) ['nowhere']", text)
+        self.assertIn("setup home: db is marked Y but its only_setups leaves this setup out", text)
 
     def test_coverage_gap_reported(self):
         text = "\n".join(self._errors([ex_row("SQ01", "SQ", 1, "chair")]))

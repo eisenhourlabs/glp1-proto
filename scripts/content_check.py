@@ -219,6 +219,15 @@ def validate(c: dict) -> tuple[list[str], list[str], dict]:
     _check_settings(settings, err)
     codes = [e["code"] for e in c["equipment"]]
     if len(codes) != len(set(codes)): err.append("equipment: duplicate codes")
+    setup_ids = {s["setup"] for s in c["setups"]}
+    only = {e["code"]: e.get("only_setups", []) for e in c["equipment"]}
+    for e in c["equipment"]:
+        bad = [x for x in e.get("only_setups", []) if x not in setup_ids]
+        if bad: err.append(f"equipment {e['code']}: only_setups names unknown setup(s) {bad}")
+    for s in c["setups"]:  # a setup can't start with an item onboarding won't show it
+        for code in s["equipment"]:
+            if only.get(code) and s["setup"] not in only[code]:
+                err.append(f"setup {s['setup']}: {code} is marked Y but its only_setups leaves this setup out")
     for s in c["setups"]:
         if not s["equipment"]: err.append(f"setup {s['setup']}: no equipment marked Y")
         if s["level_ceiling"] not in (1, 2, 3, 4): err.append(f"setup {s['setup']}: level_ceiling must be 1–4")

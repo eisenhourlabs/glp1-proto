@@ -65,7 +65,9 @@ def load_workbook_content(path: Path) -> dict:
             "active": _s(r.get("active") or "Y").upper(), "notes": _s(r.get("notes")) or None,
         })
 
-    equipment = [{"_row": r["_row"], "code": _s(r.get("code")), "label": _s(r.get("label"))} for r in raw["equipment"]]
+    # only_setups (optional column): onboarding offers the item only for these setups; empty = every setup.
+    equipment = [{"_row": r["_row"], "code": _s(r.get("code")), "label": _s(r.get("label")),
+                  "only_setups": _list(r.get("only_setups"), sep=",")} for r in raw["equipment"]]
     codes = [e["code"] for e in equipment]
 
     setups = []

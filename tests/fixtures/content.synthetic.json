@@ -12284,7 +12284,8 @@
     "m_chest",
     "m_row",
     "m_pulldown",
-    "bb"
+    "bb",
+    "m_sample"
    ]
   },
   {
@@ -12516,82 +12517,107 @@
   {
    "version": 0,
    "code": "none",
-   "label": "No equipment"
+   "label": "No equipment",
+   "only_setups": []
   },
   {
    "version": 0,
    "code": "chair",
-   "label": "Sturdy chair"
+   "label": "Sturdy chair",
+   "only_setups": []
   },
   {
    "version": 0,
    "code": "wall",
-   "label": "A wall"
+   "label": "A wall",
+   "only_setups": []
   },
   {
    "version": 0,
    "code": "counter",
-   "label": "Counter or table"
+   "label": "Counter or table",
+   "only_setups": []
   },
   {
    "version": 0,
    "code": "step",
-   "label": "Step"
+   "label": "Step",
+   "only_setups": []
   },
   {
    "version": 0,
    "code": "bench",
-   "label": "Bench"
+   "label": "Bench",
+   "only_setups": []
   },
   {
    "version": 0,
    "code": "db",
-   "label": "Dumbbells"
+   "label": "Dumbbells",
+   "only_setups": []
   },
   {
    "version": 0,
    "code": "kb",
-   "label": "Kettlebell"
+   "label": "Kettlebell",
+   "only_setups": []
   },
   {
    "version": 0,
    "code": "band",
-   "label": "Resistance band"
+   "label": "Resistance band",
+   "only_setups": []
   },
   {
    "version": 0,
    "code": "mini_band",
-   "label": "Mini band"
+   "label": "Mini band",
+   "only_setups": []
   },
   {
    "version": 0,
    "code": "cable",
-   "label": "Cable machine"
+   "label": "Cable machine",
+   "only_setups": []
   },
   {
    "version": 0,
    "code": "m_legpress",
-   "label": "Leg press machine"
+   "label": "Leg press machine",
+   "only_setups": []
   },
   {
    "version": 0,
    "code": "m_chest",
-   "label": "Chest press machine"
+   "label": "Chest press machine",
+   "only_setups": []
   },
   {
    "version": 0,
    "code": "m_row",
-   "label": "Row machine"
+   "label": "Row machine",
+   "only_setups": []
   },
   {
    "version": 0,
    "code": "m_pulldown",
-   "label": "Pulldown machine"
+   "label": "Pulldown machine",
+   "only_setups": []
   },
   {
    "version": 0,
    "code": "bb",
-   "label": "Barbell"
+   "label": "Barbell",
+   "only_setups": []
+  },
+  {
+   "version": 0,
+   "code": "m_sample",
+   "label": "Sample gym-only machine",
+   "only_setups": [
+    "commercial_gym",
+    "barbell_gym"
+   ]
   }
  ],
  "settings": {

@@ -31,8 +31,10 @@ NOTICE = ("SYNTHETIC TEST CONTENT. Every name, cue and number here is made up fo
 EQUIPMENT = [("none", "No equipment"), ("chair", "Sturdy chair"), ("wall", "A wall"), ("counter", "Counter or table"),
              ("step", "Step"), ("bench", "Bench"), ("db", "Dumbbells"), ("kb", "Kettlebell"), ("band", "Resistance band"),
              ("mini_band", "Mini band"), ("cable", "Cable machine"), ("m_legpress", "Leg press machine"),
-             ("m_chest", "Chest press machine"), ("m_row", "Row machine"), ("m_pulldown", "Pulldown machine"), ("bb", "Barbell")]
+             ("m_chest", "Chest press machine"), ("m_row", "Row machine"), ("m_pulldown", "Pulldown machine"), ("bb", "Barbell"),
+             ("m_sample", "Sample gym-only machine")]
 GYM = [c for c, _ in EQUIPMENT]
+ONLY = {"m_sample": "commercial_gym,barbell_gym"}  # onboarding offers it for these setups only (equipment.only_setups)
 SETUPS = [  # ids and labels are app vocabulary (onboarding shows the labels); equipment lists are made up
     ("commercial_gym", "Traditional / commercial gym", 4, "", GYM),
     ("barbell_gym", "Barbell-focused gym (CrossFit-style)", 4, "",
@@ -150,7 +152,7 @@ def build_workbook(path: Path) -> None:
         "exercises": (["id", "name", "pattern", "level", "equipment", "load_type", "measure", *[f"load_{a}" for a in AREAS],
                        "floor", "restrictions", "unilateral", "muscles_primary", "muscles_secondary", "cue_1", "cue_2", "cue_3",
                        "media_status", "pinned_substitutes", "active", "notes"], exercises()),
-        "equipment": (["code", "label"], [list(e) for e in EQUIPMENT]),
+        "equipment": (["code", "label", "only_setups"], [[c, lab, ONLY.get(c)] for c, lab in EQUIPMENT]),
         "setups": (["setup", "label", "level_ceiling", "pattern_ceiling_exceptions", *GYM],
                    [[s, lab, ceil, exc, *["Y" if c in eq else None for c in GYM]] for s, lab, ceil, exc, eq in SETUPS]),
         "templates": (["template_id", "cycle_type", "days_per_week", "name", "sessions", "entry_rule", "version", "active"], []),
