@@ -116,7 +116,7 @@ export function suggestNext({ loadType, last, prevRating = null, older = null, r
       note: allTop ? 'Same weight. A couple more reps, then we add weight.' : 'Same weight. Try one more rep per set.' };
   }
   if (loadType === 'bodyweight') {   // a hold at the top of its range: the next level is the way on (B6)
-    return { weight: w, action: 'level-up-check', targetReps: range.hi, note: 'You’ve mastered this hold. Ready for the next level?' };
+    return { weight: w, action: 'level-up-check', targetReps: range.hi, note: 'Same hold. You’re ready for a harder version soon.' };
   }
   const extra = set(settings, 'progression.double_jump_extra_reps');
   const twoSteps = last.rating === 'easy' && !earlyFoundations && !isSixtyPlus(ageBand) && reps.every((r) => r >= range.hi + extra);
@@ -193,7 +193,7 @@ export function bodyweightNext({ last, older = null, prevRating = null, range, a
       note: stage === 0 ? 'Try one more rep per set.' : BAND_TEMPO[stage] });
   }
   if (stage < 2) return out({ action: 'tempo', stage: stage + 1, targetReps: range.lo, note: 'Same exercise, slower now.' });
-  return out({ action: 'level-up-check', note: 'You’ve mastered this one. Ready for the next level?' });
+  return out({ action: 'level-up-check', note: 'Same again, slow with the pause. You’re ready for a harder version soon.' });
 }
 
 /** How each band and bodyweight stage reads in the dose line. */
