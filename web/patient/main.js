@@ -1,7 +1,8 @@
 // Patient app entry: route by program status → onboarding, paused (clearance), or home.
 import { mountShell, signOutButton } from '../shared/shell.js';
 import { h, clear } from '../shared/dom.js';
-import { CONFIG } from '../config.js';
+import { CONFIG, APP_VERSION } from '../config.js';
+import { watchForUpdate } from '../shared/update.js';
 import { loadPatient, savePatient, activeCycle, loadContent, createFirstCycle } from './api.js';
 import { runOnboarding } from './onboarding.js';
 import { renderPaused } from './paused.js';
@@ -15,7 +16,8 @@ mountShell({
       h('div', {}, h('div', { class: 'brand' }, CONFIG.BRAND_NAME), profile.clinics?.name ? h('div', { class: 'clinic' }, profile.clinics.name) : null),
       signOutButton());
     const body = h('div', {});
-    root.append(header, body, h('p', { class: 'credit' }, 'Strength programming for your clinic’s patients'));
+    root.append(header, body, h('p', { class: 'credit' }, 'Strength programming for your clinic’s patients', h('span', { class: 'version' }, ` · version ${APP_VERSION}`)));
+    watchForUpdate();
 
     const route = async () => {
       clear(body);

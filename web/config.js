@@ -4,6 +4,11 @@
 // SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY are public by design (the browser needs them);
 // row-level security in the database is what protects data. Never put a secret/service key here.
 
+import './version.js';
+
+/** The deployed app version (web/version.js); shown in the footer and sent with error reports. */
+export const APP_VERSION = globalThis.GLP1PROTO_VERSION ?? 'dev';
+
 export const CONFIG = Object.freeze({
   ENV: 'prototype',                       // 'prototype' | 'staging' | 'production'
   SUPABASE_URL: 'https://xfkwcobapjbeczoxffjf.supabase.co',

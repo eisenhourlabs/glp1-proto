@@ -4,7 +4,7 @@ import { h } from './dom.js';
 /** A step screen: progress bar, title, lead text, body, and an action row. */
 export function stepScreen({ step, total, title, lead, body = [], actions = [] }) {
   return h('section', { class: 'step' },
-    total ? h('div', { class: 'progress', role: 'progressbar', 'aria-valuemin': 0, 'aria-valuemax': total, 'aria-valuenow': step },
+    total ? h('div', { class: 'progress', role: 'progressbar', 'aria-label': `Step ${step} of ${total}`, 'aria-valuemin': 0, 'aria-valuemax': total, 'aria-valuenow': step },
       h('span', { style: `width:${Math.round((step / total) * 100)}%` })) : null,
     h('h1', {}, title),
     lead ? h('p', { class: 'lead' }, lead) : null,

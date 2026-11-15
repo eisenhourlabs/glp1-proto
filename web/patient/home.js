@@ -1,6 +1,7 @@
 // Home: this week's queue (Framework §13) with the next workout one tap away, the week-4/9 message (§7.2a),
 // comeback framing, and the workout flow: readiness → warm-up → exercises → check-in → reward.
 import { h, clear } from '../shared/dom.js';
+import { updateSlot } from '../shared/update.js';
 import { primary, secondary, choices } from '../shared/ui.js';
 import { weekOfCycle, weekModeMessage } from '../engine/cycle.js';
 import { restartDue } from '../engine/adherence.js';
@@ -217,7 +218,7 @@ export async function renderHome(root, { patient, cycle, reload }) {
     })),
     ended ? null : h('p', { class: 'small muted' }, 'Do them in any days that suit you. Anything not done by the end of the week simply drops off.'));
 
-  root.append(hero, action ? h('div', { class: 'home-action' }, action) : null, queue,
+  root.append(updateSlot(), hero, action ? h('div', { class: 'home-action' }, action) : null, queue,
     h('div', { class: 'home-action' }, secondary('Your progress', showProgress)), installCard());
 
   function fail(e) { console.error(e); clear(root).append(h('section', { class: 'card' }, h('h1', {}, 'Something didn’t load'), h('p', {}, 'Check your connection, then reload.'))); }

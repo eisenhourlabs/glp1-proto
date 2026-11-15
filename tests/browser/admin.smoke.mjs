@@ -30,9 +30,10 @@ t.session_logs = [
   log(14, 'u1', 1, '2026-11-12', 2, null, { status: 'skipped', skip_reason: 'busy', feel: null }),
   log(20, 'u3', 2, '2026-11-02', 1, 'A'),
 ];
+const sqEx = content.library.find((e) => e.pattern === 'SQ' && e.load_type === 'dumbbell');   // any loaded squat in the content
 t.exercise_logs = [
-  { exercise_id: 'SQ04', sets: [{ weight: 10, reps: 12 }], skipped: false, created_at: '2026-11-02T10:00:00Z', patient_id: 'u1' },
-  { exercise_id: 'SQ04', sets: [{ weight: 15, reps: 10 }], skipped: false, created_at: '2026-11-10T10:00:00Z', patient_id: 'u1' },
+  { exercise_id: sqEx.id, sets: [{ weight: 10, reps: 12 }], skipped: false, created_at: '2026-11-02T10:00:00Z', patient_id: 'u1' },
+  { exercise_id: sqEx.id, sets: [{ weight: 15, reps: 10 }], skipped: false, created_at: '2026-11-10T10:00:00Z', patient_id: 'u1' },
 ];
 t.flags = [{ id: 1, patient_id: 'u1', type: 'dizzy', detail: { session_log_id: 13 }, created_at: '2026-11-10T10:20:00Z', resolved_at: null },
   { id: 2, patient_id: 'u2', type: 'screening', detail: {}, created_at: '2026-11-03T09:00:00Z', resolved_at: null }];
@@ -70,7 +71,7 @@ await page.selectOption('select[aria-label="Clinics"]', '');
 
 await page.getByRole('link', { name: 'Dana' }).click();
 await page.getByText('Workouts and check-ins').waitFor(); await snap('02-patient');
-for (const txt of ['Squats felt tough', 'lighter week next', 'Goblet Box Squat', '10 lb → 15 lb', 'Felt dizzy or unwell', 'Busy']) {
+for (const txt of ['Squats felt tough', 'lighter week next', sqEx.name, '10 lb → 15 lb', 'Felt dizzy or unwell', 'Busy']) {
   if (!(await page.getByText(txt, { exact: false }).count())) fail(`patient page missing "${txt}"`);
 }
 await page.locator('.flag.open').getByRole('button', { name: 'Resolve' }).click();

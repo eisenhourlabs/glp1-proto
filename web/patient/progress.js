@@ -26,7 +26,7 @@ export async function renderProgress(root, ctx) {
       h('h2', {}, 'Workouts by week'),
       h('ol', { class: 'weeks', 'aria-label': 'Workouts done each week' }, weeks.map((w) => h('li', { class: 'week-row' },
         h('span', { class: 'week-n' }, `Week ${w.week}`),
-        h('span', { class: 'dots', 'aria-label': `${w.done} of ${w.planned}` },
+        h('span', { class: 'dots', role: 'img', 'aria-label': `${w.done} of ${w.planned}` },
           Array.from({ length: w.planned }, (_, i) => h('span', { class: `dot${i < w.done ? ' on' : ''}` })))))),
       h('p', { class: 'small muted' }, 'Your streak only breaks if you miss two planned workouts in a row.')),
     h('section', { class: 'card' },

@@ -1,6 +1,6 @@
 // Supabase client + auth helpers shared by every entry page.
-// The supabase-js version is pinned; bump deliberately.
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/+esm';
+// supabase-js is self-hosted in web/vendor/ (pinned; rebuilt by scripts/vendor.sh, versions in docs/setup.md).
+import { createClient } from '../vendor/supabase-js.js';
 import { CONFIG, isConfigured } from '../config.js';
 
 // Root of the web app (the folder holding index.html), wherever it is hosted.
