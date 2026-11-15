@@ -1,5 +1,5 @@
 {
-  "about": "Synthetic speed-run personas (invented people, no real patient data). Weeks are calendar weeks of the run (week 1 starts Monday 2026-01-05). A week not listed does every planned session with an ordinary check-in. Session fields: feel too_easy|right|too_hard, energy low|ok|good, scale (with low energy), sore [areas] + soreness some|a_lot, areas [work-around chips], pain area (a standing work-around until better), better area (taps Feeling better). Persona offer: accept (default) or decline in-cycle level-up offers. An empty week [] is a gap; after week 9 of a cycle an empty week means she has not started her next cycle yet. events: setup / dumbbells changes, used from her next cycle.",
+  "about": "Synthetic speed-run personas (invented people, no real patient data). Weeks are calendar weeks of the run (week 1 starts Monday 2026-01-05). A week not listed does every planned session with an ordinary check-in. Session fields: feel too_easy|right|too_hard, energy low|ok|good, scale (with low energy), sore [areas] + soreness some|a_lot, areas [work-around chips], pain area (a standing work-around until better), better area (taps Feeling better), lighter (taps Rough week? before this workout), short (the short version). Persona offer: accept (default) or decline in-cycle level-up offers. An empty week [] is a gap; after week 9 of a cycle an empty week means she has not started her next cycle yet. events: setup / dumbbells changes, used from her next cycle.",
   "personas": [
     {"key": "dana", "name": "Dana", "age_band": "40-49", "setup": "commercial_gym", "days": 3, "minutes": 45, "experience": "none", "check": {},
      "workarounds": ["knees"], "restrictions": [], "floorOk": false, "strength": 1.0,
@@ -15,8 +15,8 @@
      "weeks": {"2": [{}, {"feel": "too_hard"}, {"energy": "low"}, {}], "3": [{"feel": "too_hard"}, {"energy": "low", "scale": true}, {}, {}], "7": [{}, {}, {}]}},
     {"key": "carol", "name": "Carol", "age_band": "60-69", "setup": "home_gym", "days": 3, "minutes": 45, "experience": "none", "check": {"sitToStand": true},
      "workarounds": [], "restrictions": ["floor", "supine"], "floorOk": false, "strength": 0.75,
-     "story": "63, never lifted, dumbbells and a bench at home. Provider said no floor work and no lying flat.",
-     "weeks": {"1": [{}, {"sore": ["knees", "hips"], "soreness": "some"}, {}], "3": [{}, {}], "8": [{}, {}], "20": [{}, {}]}},
+     "story": "63, never lifted, dumbbells and a bench at home. Provider said no floor work and no lying flat. Does two short versions in week 16.",
+     "weeks": {"1": [{}, {"sore": ["knees", "hips"], "soreness": "some"}, {}], "3": [{}, {}], "8": [{}, {}], "16": [{"short": true}, {}, {"short": true}], "20": [{}, {}]}},
     {"key": "lisa", "name": "Lisa", "age_band": "40-49", "setup": "commercial_gym", "days": 3, "minutes": 45, "experience": "some", "check": {},
      "workarounds": [], "restrictions": [], "floorOk": false, "strength": 1.0,
      "story": "Busy job with travel: misses week 5, a patchy week 8, then five weeks away in cycle 2.",
@@ -43,14 +43,16 @@
                "4": [{"areas": ["knees"]}, {"pain": "knees"}, {}], "6": [{"better": "knees"}, {}, {}]}},
     {"key": "gina", "name": "Gina", "age_band": "40-49", "setup": "commercial_gym", "days": 4, "minutes": 45, "experience": "some", "check": {"hinge": true},
      "workarounds": [], "restrictions": [], "floorOk": false, "strength": 1.1,
-     "story": "Asks for 4 days in Foundations (gets 3), picks 4 at her review. Two bad weeks early, a hard patch in cycle 2.",
+     "story": "Asks for 4 days in Foundations (gets 3), picks 4 at her review. Two bad weeks early, a hard patch in cycle 2, tries the lighter week in week 13 (already lighter, not offered) and switches in week 16.",
      "review": {"days": 4},
      "weeks": {"2": [{"feel": "too_hard"}, {"feel": "too_hard", "energy": "low"}, {"energy": "low"}],
                "3": [{"feel": "too_hard", "energy": "low"}, {"energy": "low"}, {}],
-               "12": [{"feel": "too_hard"}, {"feel": "too_hard"}, {}, {}]}},
+               "12": [{"feel": "too_hard"}, {"feel": "too_hard"}, {}, {}], "13": [{"lighter": true}, {}, {}, {}], "16": [{"lighter": true}, {}, {}, {}]}},
     {"key": "nora", "name": "Nora", "age_band": "50-59", "setup": "home_gym", "days": 3, "minutes": 45, "experience": "some", "check": {},
      "workarounds": [], "restrictions": [], "floorOk": false, "strength": 0.8,
-     "story": "Shows up every week but finds most sessions too hard, all the way through.",
-     "default": [{"feel": "too_hard"}, {"feel": "too_hard"}, {}]}
+     "story": "Shows up every week but finds most sessions too hard, all the way through. Tries the lighter week three times in cycle 1 (the third is refused) and the short version in week 8.",
+     "default": [{"feel": "too_hard"}, {"feel": "too_hard"}, {}],
+     "weeks": {"3": [{"feel": "too_hard", "lighter": true}, {"feel": "too_hard"}, {}], "5": [{"feel": "too_hard", "lighter": true}, {"feel": "too_hard"}, {}],
+               "7": [{"feel": "too_hard", "lighter": true}, {"feel": "too_hard"}, {}], "8": [{"short": true}, {"feel": "too_hard", "short": true}, {}]}}
   ]
 }

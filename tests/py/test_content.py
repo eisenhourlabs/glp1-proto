@@ -109,6 +109,14 @@ class SettingsTests(unittest.TestCase):
         _check_settings({"levelup.offer_min_week": 2, "levelup.offer_decline_days": 3, "bodyweight.sessions_per_step": 0}, err)
         self.assertEqual(len(err), 3)
 
+    def test_lighter_ranges(self):
+        from content_check import _check_settings
+        err = []
+        _check_settings({"lighter.self_max_per_cycle": 2, "lighter.self_days": 7}, err)
+        self.assertEqual(err, [])
+        _check_settings({"lighter.self_max_per_cycle": 0, "lighter.self_days": 30}, err)
+        self.assertEqual(len(err), 2)
+
 
 class EligibilityTests(unittest.TestCase):
     def ex(self, **kw):

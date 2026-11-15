@@ -76,6 +76,21 @@ test('B6: offers from week 4, accepted ones apply, "Not yet" waits 2 weeks', () 
   assert.deepEqual(mike.violations, []);
 });
 
+test('B9: two lighter weeks a cycle at most, each 7 days at the lighter dose; the short version is two main lifts + a finisher', () => {
+  const nora = runPersona(personas.find((p) => p.key === 'nora'), content, { weeks: 9 });
+  const taps = nora.weeks.flatMap((w) => (w.sessions || []).filter((s) => s.roughWeek)).map((s) => s.roughWeek);
+  assert.deepEqual(taps, ['switched', 'switched', 'not offered']);
+  const lighter = nora.weeks.flatMap((w) => w.sessions || []).filter((s) => s.selfLighter);
+  assert.ok(lighter.length >= 2 && lighter.every((s) => s.weekMode === 'lighter'));
+  const short = nora.weeks.flatMap((w) => w.sessions || []).filter((s) => s.short);
+  assert.equal(short.length, 2);
+  for (const s of short) {
+    assert.ok(s.lines.filter((l) => l.role === 'P').length <= 2 && s.lines.filter((l) => l.role === 'F').length <= 1);
+    assert.ok(!s.lines.some((l) => l.role === 'S' || l.role === 'O'));
+  }
+  assert.deepEqual(nora.violations, []);
+});
+
 test('equipment change applies from the next cycle', () => {
   const tanya = runPersona(personas.find((p) => p.key === 'tanya'), content, { weeks: 13 });
   assert.equal(tanya.cycles[0].setup, 'minimal_home');

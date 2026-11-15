@@ -41,7 +41,7 @@ async function run(name, { redFlag }) {
   for (const d of ['Mon', 'Wed', 'Fri']) await page.locator('.choices').nth(2).getByRole('button', { name: d, exact: true }).click();
   await snap('07-schedule');
   await btn('Continue').click();
-  await btn('Keep my muscle while I lose weight').click(); await page.fill('textarea', 'Carry my grandkids without my knees hurting');
+  await btn('Keep my muscle', { exact: true }).click(); await page.fill('textarea', 'Carry my grandkids without my knees hurting');
   await btn('Continue').click();
   if (redFlag) {
     await btn('Continue').click();
