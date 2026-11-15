@@ -7,6 +7,9 @@ import { loadPatient, savePatient, activeCycle, loadContent, createFirstCycle } 
 import { runOnboarding } from './onboarding.js';
 import { renderPaused } from './paused.js';
 import { renderHome } from './home.js';
+import { initOutbox } from './outbox.js';
+import { saveCopy } from '../shared/offline.js';
+import { syncBadge } from './sync_ui.js';
 
 mountShell({
   title: 'Your strength program',
@@ -16,7 +19,8 @@ mountShell({
       h('div', {}, h('div', { class: 'brand' }, CONFIG.BRAND_NAME), profile.clinics?.name ? h('div', { class: 'clinic' }, profile.clinics.name) : null),
       signOutButton());
     const body = h('div', {});
-    root.append(header, body, h('p', { class: 'credit' }, 'Strength programming for your clinic’s patients', h('span', { class: 'version' }, ` · version ${APP_VERSION}`)));
+    initOutbox(profile.id).catch((e) => console.warn('outbox', e));   // sends any workout saved while offline (C4)
+    root.append(header, syncBadge(), body, h('p', { class: 'credit' }, 'Strength programming for your clinic’s patients', h('span', { class: 'version' }, ` · version ${APP_VERSION}`)));
     watchForUpdate();
 
     const route = async () => {
@@ -36,7 +40,10 @@ mountShell({
           return;
         }
         let cycle = await activeCycle(profile.id);
-        if (!cycle) cycle = await createFirstCycle(patient, await loadContent());   // e.g. cleared but cycle not built yet
+        if (!cycle) {                                                            // e.g. cleared but cycle not built yet
+          cycle = await createFirstCycle(patient, await loadContent());
+          saveCopy(`${profile.id}:activeCycle`, cycle);                         // so it opens offline too (C4)
+        }
         return renderHome(body, { patient, cycle, reload: route });
       } catch (e) {
         console.error(e);

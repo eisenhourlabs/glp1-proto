@@ -23,6 +23,7 @@ This repo is the **GLP-1 clinic strength program prototype**. It is a separate p
 - UI text is set with `textContent` (via `shared/dom.js`), never `innerHTML` with data.
 - Relative URLs only (the app must work under any base path).
 - **Bump `web/version.js` in every PR that changes `web/`** (CI checks); after adding or removing a file under `web/`, run `node scripts/sw_assets.mjs`. Third-party code is self-hosted in `web/vendor/` (`bash scripts/vendor.sh`); never load from a CDN.
+- **Offline (C4):** patient workout writes (sessions, exercise logs, check-ins, flags, adjustments) go through `web/patient/log_writes.js` → the outbox (queued in localStorage, sent in order, `client_ref` makes resends land once). Patient reads a workout needs use `remember`/`fetchOrSaved` (`web/shared/offline.js`) so they work from the last saved copy. Don't write those tables with `db` directly from the patient app.
 - Browser tests in CI use `tests/fixtures/content.synthetic.json` (made up; rebuild with `python scripts/make_synthetic_content.py`). Smokes must work on any content that passes `content_check`: no real exercise ids or names in tests.
 - `npm test`, `bash scripts/test_db.sh` and `python -m unittest discover -s tests/py` must pass before every commit or PR.
 - **Edge Functions that use the engine are generated:** edit `supabase/functions_src/<name>/` or `web/engine/`, then run `node scripts/build_functions.mjs`. `tests/functions.test.js` fails if `supabase/functions/<name>/index.ts` is stale. Never edit a generated `index.ts` by hand.

@@ -17,7 +17,7 @@ class Q {
   order(c, { ascending = true } = {}) { this.sorts.push([c, ascending]); return this; }
   limit(n) { this.max = n; return this; }
   delete() { this.op = 'delete'; return this; }
-  upsert(rows, { onConflict } = {}) { this.op = 'upsert'; this.payload = Array.isArray(rows) ? rows : [rows]; this.keys = (onConflict || 'id').split(','); return this; }
+  upsert(rows, { onConflict, ignoreDuplicates } = {}) { this.op = 'upsert'; this.payload = Array.isArray(rows) ? rows : [rows]; this.keys = (onConflict || 'id').split(','); this.ignore = !!ignoreDuplicates; return this; }
   maybeSingle() { this.one = 'maybe'; return this; }
   single() { this.one = 'single'; return this; }
   insert(rows) { this.op = 'insert'; this.payload = Array.isArray(rows) ? rows : [rows]; return this; }
@@ -32,9 +32,9 @@ class Q {
     } else if (this.op === 'upsert') {
       data = this.payload.map((row) => {
         const hit = t.find((r) => this.keys.every((k) => String(r[k]) === String(row[k])));
-        if (hit) return Object.assign(hit, row);
+        if (hit) return this.ignore ? null : Object.assign(hit, row);
         const fresh = { id: nextId++, created_at: new Date().toISOString(), ...row }; t.push(fresh); return fresh;
-      });
+      }).filter(Boolean);
     } else if (this.op === 'update') {
       data = t.filter((r) => this.match(r)); data.forEach((r) => Object.assign(r, this.payload));
     } else if (this.op === 'delete') {
@@ -48,14 +48,22 @@ class Q {
       data = [...data].sort((a, b) => (a[c] === b[c] ? 0 : (a[c] > b[c] ? 1 : -1) * (asc ? 1 : -1)));
     }
     if (this.max != null) data = data.slice(0, this.max);
+    if (this.op !== 'select') logWrite(this.table, this.op, data);
     save();
     if (this.one) data = data[0] ?? null;
     if (this.one === 'single' && !data) return { data: null, error: { message: 'no rows' } };
     return { data: structuredClone(data), error: null };
   }
-  then(res, rej) { return Promise.resolve().then(() => this.run()).then(res, rej); }
+  // Offline: the request never reaches the database, and supabase-js reports it like this.
+  then(res, rej) { return reachable().then((up) => (up ? this.run() : NET_ERROR())).then(res, rej); }
 }
 
+// Offline = the network is really unreachable (Playwright context.setOffline): a HEAD request to the test server
+// (not answered by the service worker, which only serves GET) fails. navigator.onLine alone is not reliable.
+const reachable = () => fetch(new URL('../__online', import.meta.url), { method: 'HEAD', cache: 'no-store' }).then(() => true, () => false);
+const NET_ERROR = () => ({ data: null, error: { message: 'TypeError: Failed to fetch', details: '', hint: '', code: '' } });
+/** Every write that reached the "server", in order (the offline smoke checks nothing arrives twice). */
+const logWrite = (table, op, rows) => { (S.writes ??= []).push({ table, op, n: rows.length }); };
 const me = () => S.session?.user?.id;
 const patient = () => T('patients').find((p) => p.id === me());
 const RPC = {
@@ -104,7 +112,7 @@ export function createClient() {
         return { data: { ok: true }, error: null };
       },
     },
-    rpc: async (name, args) => { const data = RPC[name](args || {}); save(); return { data, error: null }; },
+    rpc: async (name, args) => { if (!(await reachable())) return NET_ERROR(); const data = RPC[name](args || {}); save(); return { data, error: null }; },
     auth: {
       getSession: async () => ({ data: { session: S.session } }),
       signInWithPassword: async ({ email, password }) => {

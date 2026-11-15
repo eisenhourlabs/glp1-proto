@@ -1,5 +1,6 @@
 // Data access for the patient app. Every call is scoped by row-level security to the signed-in patient.
 import { db } from '../shared/supa.js';
+import { remember } from '../shared/offline.js';
 import { startingLevels, startingCycle } from '../engine/levels.js';
 import { chooseTemplate, materializeCycle } from '../engine/cycle.js';
 import { applyLevelChanges, slotsWithSwaps } from '../engine/review.js';
@@ -12,7 +13,8 @@ export const localToday = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-export const loadPatient = async (uid) => must(await db.from('patients').select('*').eq('id', uid).maybeSingle());
+/** Her patient row. Works offline from the last saved copy (C4), like the cycle and the content below. */
+export const loadPatient = async (uid) => remember(`${uid}:patient`, async () => must(await db.from('patients').select('*').eq('id', uid).maybeSingle()));
 export const savePatient = async (uid, fields) => must(await db.from('patients').update(fields).eq('id', uid));
 
 export async function signDocument(uid, { docType, version, signedName, answers = null }) {
@@ -30,12 +32,14 @@ let contentCache = null;
 /** The current content version (library, templates, slots, setups, equipment). Cached for the session. */
 export async function loadContent() {
   if (contentCache) return contentCache;
-  const version = must(await db.rpc('content_current_version'));
-  if (!version) throw new Error('No programming content has been imported yet.');
-  const q = (table) => db.from(table).select('*').eq('version', version);
-  const [library, templates, slots, setups, equipment] = await Promise.all(
-    ['content_exercises', 'content_templates', 'content_slots', 'content_setups', 'content_equipment'].map(async (t) => must(await q(t))));
-  contentCache = { version, library, templates, slots, setups, equipment };
+  contentCache = await remember('content:current', async () => {
+    const version = must(await db.rpc('content_current_version'));
+    if (!version) throw new Error('No programming content has been imported yet.');
+    const q = (table) => db.from(table).select('*').eq('version', version);
+    const [library, templates, slots, setups, equipment] = await Promise.all(
+      ['content_exercises', 'content_templates', 'content_slots', 'content_setups', 'content_equipment'].map(async (t) => must(await q(t))));
+    return { version, library, templates, slots, setups, equipment };
+  });
   return contentCache;
 }
 
@@ -46,10 +50,12 @@ export const engineProfile = (p) => ({
 });
 
 export async function activeCycle(uid) {
-  const cycle = must(await db.from('cycles').select('*').eq('patient_id', uid).eq('status', 'active').maybeSingle());
-  if (!cycle) return null;
-  const items = must(await db.from('cycle_items').select('*').eq('cycle_id', cycle.id).order('session').order('ord'));
-  return { ...cycle, items };
+  return remember(`${uid}:activeCycle`, async () => {
+    const cycle = must(await db.from('cycles').select('*').eq('patient_id', uid).eq('status', 'active').maybeSingle());
+    if (!cycle) return null;
+    const items = must(await db.from('cycle_items').select('*').eq('cycle_id', cycle.id).order('session').order('ord'));
+    return { ...cycle, items };
+  });
 }
 
 /**

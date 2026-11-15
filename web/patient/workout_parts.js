@@ -101,6 +101,10 @@ export function dizzySheet({ raise, onKeepGoing, onEnd }) {
       secondary('I feel OK now. Keep going', () => { close(); onKeepGoing?.(); }),
       primary('End today’s workout', () => { close(); onEnd?.(); })),
   ]);
-  Promise.resolve().then(raise).then(() => { status.textContent = DIZZY.flagged; })
+  Promise.resolve().then(raise).then((r) => {
+    status.textContent = r?.queued
+      ? 'No signal right now. The program team will be told as soon as your phone is back online. If you need help, contact your clinic.'
+      : DIZZY.flagged;
+  })
     .catch(() => { status.textContent = 'Couldn’t reach the team right now. If you need help, contact your clinic.'; });
 }

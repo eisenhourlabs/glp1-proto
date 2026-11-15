@@ -2,6 +2,7 @@
 // supabase-js is self-hosted in web/vendor/ (pinned; rebuilt by scripts/vendor.sh, versions in docs/setup.md).
 import { createClient } from '../vendor/supabase-js.js';
 import { CONFIG, isConfigured } from '../config.js';
+import { remember, clearReads } from './offline.js';
 
 // Root of the web app (the folder holding index.html), wherever it is hosted.
 export const APP_ROOT = new URL('../', import.meta.url);
@@ -27,12 +28,16 @@ export async function getSession() {
 export async function getProfile() {
   const session = await getSession();
   if (!session) return null;
-  const { data, error } = await db
-    .from('profiles')
-    .select('id, role, clinic_id, display_name, is_demo, clinics ( name, short_name, accent_color, logo_path )')
-    .eq('id', session.user.id)
-    .maybeSingle();
-  if (error) throw error;
+  // Saved on the phone too, so the patient app opens without a signal (C4).
+  const data = await remember(`${session.user.id}:profile`, async () => {
+    const { data: row, error } = await db
+      .from('profiles')
+      .select('id, role, clinic_id, display_name, is_demo, clinics ( name, short_name, accent_color, logo_path )')
+      .eq('id', session.user.id)
+      .maybeSingle();
+    if (error) throw error;
+    return row;
+  });
   return data ? { ...data, email: session.user.email } : { id: session.user.id, email: session.user.email, role: null };
 }
 
@@ -42,6 +47,7 @@ export async function signIn(email, password) {
 }
 
 export async function signOut() {
+  await clearReads().catch(() => {});        // her saved copies leave with her; unsent workouts wait for her next sign-in
   await db.auth.signOut();
 }
 
