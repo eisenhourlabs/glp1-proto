@@ -7,6 +7,7 @@ import { updateSlot, watchForUpdate } from '../shared/update.js';
 import { renderClinicReport } from './report.js';
 
 mountShell({
+  app: 'clinic',
   title: 'Clinic dashboard',
   allowedRoles: ['clinic_viewer'],
   async render(profile, root) {

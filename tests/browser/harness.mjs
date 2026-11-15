@@ -21,7 +21,8 @@ export async function axeScan(page, label) {
   if (!(await page.evaluate(() => !!window.axe))) await page.addScriptTag({ content: AXE });
   const violations = await page.evaluate(async () => (await window.axe.run(document, { resultTypes: ['violations'] })).violations
     .filter((v) => v.impact === 'serious' || v.impact === 'critical')
-    .map((v) => ({ id: v.id, impact: v.impact, help: v.help, nodes: v.nodes.slice(0, 3).map((n) => n.target.join(' ')) })));
+    .map((v) => ({ id: v.id, impact: v.impact, help: v.help, nodes: v.nodes.slice(0, 3).map((n) => n.target.join(' ')),
+      detail: v.nodes[0]?.any?.[0]?.message ?? '' })));
   appendFileSync(A11Y, `${JSON.stringify({ label, path: new URL(page.url()).pathname, violations })}\n`);
 }
 

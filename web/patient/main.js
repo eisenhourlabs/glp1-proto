@@ -12,6 +12,7 @@ import { saveCopy } from '../shared/offline.js';
 import { syncBadge } from './sync_ui.js';
 
 mountShell({
+  app: 'patient',
   title: 'Your strength program',
   allowedRoles: ['patient'],
   async render(profile, root) {

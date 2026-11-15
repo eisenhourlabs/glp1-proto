@@ -4,10 +4,16 @@ import { CONFIG, isConfigured } from './config.js';
 import { db, signIn, getSession } from './shared/supa.js';
 import { h, clear } from './shared/dom.js';
 import { primary, statusLine } from './shared/ui.js';
+import { screenChange } from './shared/a11y.js';
+import { installErrorReporting } from './shared/errors.js';
 import { CODE_RE, normalizeCode, checkSignup, ENROLL_ERRORS } from './shared/enroll_rules.js';
 
+installErrorReporting('join');
 const root = document.getElementById('app');
 if (CONFIG.DEMO_BANNER) document.body.prepend(h('div', { class: 'demo-banner' }, 'Prototype · demo data only'));
+
+// Each step replaces the page content; show() also moves focus to the new heading (C6).
+const show = (...nodes) => { clear(root).append(...nodes); screenChange(root); };
 
 const field = (label, attrs) => {
   const input = h('input', attrs);
@@ -25,7 +31,7 @@ function codeStep(prefill = '', problem = '') {
   const code = field('Clinic code', { type: 'text', autocomplete: 'off', autocapitalize: 'characters', maxlength: 24, value: prefill });
   const msg = statusLine();
   msg.textContent = problem;
-  clear(root).append(h('section', { class: 'card narrow' },
+  show(h('section', { class: 'card narrow' },
     h('h1', {}, `Join ${CONFIG.BRAND_NAME}`),
     h('p', { class: 'muted' }, 'Enter the code from your clinic’s card or email.'),
     h('div', { class: 'stack' }, code.el, msg, primary('Continue', async () => {
@@ -67,7 +73,7 @@ function formStep(code, b) {
       submit.disabled = false;
     }
   });
-  clear(root).append(h('section', { class: 'card narrow' },
+  show(h('section', { class: 'card narrow' },
     h('p', { class: 'eyebrow' }, b.clinic_name),
     h('h1', {}, 'Create your account'),
     h('p', { class: 'muted' }, `${b.clinic_name} offers this strength program to its patients. It takes about a minute.`),

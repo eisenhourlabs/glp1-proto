@@ -22,7 +22,7 @@ Goal: move the app to accounts owned by Brad's company **without touching any ot
 - [ ] Import content: `python scripts/import_content.py` (from the private content folder).
 - [ ] Re-create clinics, codes and branding for real clinics only (no demo clinics in prod; demo goes to staging). Check each clinic's **time zone** (`clinics.timezone`, set from the browser of whoever creates it).
 - [ ] Decide the small-numbers threshold for clinic reports (`report.min_cell`, default 5; see `supabase_settings.md`).
-- [ ] Deploy Edge Functions: for each folder in `supabase/functions/`, create the function in Dashboard → Edge Functions and paste the code (or `supabase functions deploy` if the CLI is in use). `enroll`: **Verify JWT off**.
+- [ ] Deploy Edge Functions: for each folder in `supabase/functions/`, create the function in Dashboard → Edge Functions and paste the code (or `supabase functions deploy` if the CLI is in use). `enroll`, `client-error` and `health`: **Verify JWT off**.
 - [ ] Edge Function secrets: a **new** `ANTHROPIC_API_KEY` under Brad's Anthropic account; re-run `scripts/import_ai_brief.py`.
 - [ ] Reprint staff kits (Admin → Clinics → Staff kit): the QR codes point at the old address.
 
@@ -40,6 +40,7 @@ Goal: move the app to accounts owned by Brad's company **without touching any ot
 - [ ] Demo patient (staging) can sign in, open a workout, log a set, finish the session.
 - [ ] Clinic viewer sees only aggregates.
 - [ ] Password reset email arrives and `reset.html` sets a new password.
+- [ ] `https://<project-ref>.supabase.co/functions/v1/health` answers `{"ok":true,"database":"up",…}`; a deliberately thrown error in the browser console of the patient page shows up in the `client_errors` table within a minute (see `docs/error_reporting.md`).
 - [ ] Push notification arrives on an installed iPhone PWA (once push exists).
 
 ## 5. Clean up Troy's side

@@ -5,9 +5,10 @@ import { stepScreen, choices, primary, secondary, statusLine } from '../shared/u
 import { addDays } from '../engine/util.js';
 import { checkinActions, primariesProgressing } from '../engine/checkin.js';
 import { weeklyCounts, streaks, rewardMessage } from '../engine/progress.js';
+import { weekStreaks } from '../engine/week_streak.js';
 import { localToday } from './api.js';
 import { saveCheckin, cycleLogs, flagsSince, cycleAdjustments, addAdjustment, raiseFlag, sessionExerciseLogs } from './log_api.js';
-import { AREA_OPTIONS } from './session_copy.js';
+import { AREA_OPTIONS, WEEKLY_STREAK_NOTE } from './session_copy.js';
 
 const FEEL = [
   { value: 'too_easy', label: 'Too easy' }, { value: 'right', label: 'About right' }, { value: 'too_hard', label: 'Too hard' },
@@ -77,6 +78,7 @@ export async function renderReward(root, ctx) {
   const logs = await cycleLogs(ctx.cycle.id);
   const weeks = weeklyCounts(logs, ctx.week, ctx.perWeek);
   const s = streaks(weeks, ctx.week);
+  const wk = weekStreaks(weeks, ctx.week);
   const thisWeek = weeks[weeks.length - 1];
   root.append(h('section', { class: 'step center reward' },
     h('div', { class: 'badge', 'aria-hidden': 'true' }, '✓'),
@@ -84,9 +86,9 @@ export async function renderReward(root, ctx) {
     h('p', { class: 'lead' }, rewardMessage(s.total)),
     h('div', { class: 'stats' },
       stat(`${thisWeek?.done ?? 0} of ${ctx.perWeek}`, 'this week'),
-      stat(String(s.current), 'streak'),
+      stat(String(wk.current), 'weekly streak'),
       stat(String(s.total), s.total === 1 ? 'workout total' : 'workouts total')),
-    h('p', { class: 'small muted' }, 'Your streak only breaks if you miss two planned workouts in a row.'),
+    h('p', { class: 'small muted' }, WEEKLY_STREAK_NOTE),
     ...ctx.messages.map((m) => h('p', { class: 'card soft' }, m)),
     ctx.offerCard ?? null,
     h('div', { class: 'actions' }, secondary('See progress', ctx.onProgress), primary('Back to home', ctx.onHome))));

@@ -2,15 +2,18 @@
 import { h } from '../shared/dom.js';
 import { primary } from '../shared/ui.js';
 import { weeklyCounts, streaks, strengthWins } from '../engine/progress.js';
+import { weekStreaks } from '../engine/week_streak.js';
 import { cycleLogs, allExerciseLogs } from './log_api.js';
 import { reminderCard } from './extras.js';
+import { WEEKLY_STREAK_NOTE } from './session_copy.js';
 
 /** ctx: { patient, cycle, template, week, library, carriedBest (best streak before a restart), onBack } */
 export async function renderProgress(root, ctx) {
   const [logs, exLogs] = await Promise.all([cycleLogs(ctx.cycle.id), allExerciseLogs(ctx.patient.id)]);
   const perWeek = ctx.template.days_per_week;
   const weeks = weeklyCounts(logs, ctx.week, perWeek);
-  const s = streaks(weeks, ctx.week);
+  const total = streaks(weeks, ctx.week).total;
+  const s = weekStreaks(weeks, ctx.week);
   s.best = Math.max(s.best, ctx.carriedBest ?? 0);   // a restart after time away (B7) keeps her best streak
   const wins = strengthWins(exLogs, ctx.library);
 
@@ -19,16 +22,18 @@ export async function renderProgress(root, ctx) {
       h('p', { class: 'eyebrow' }, `${ctx.template.name} · Week ${ctx.week} of 9`),
       h('h1', {}, 'Your progress'),
       h('div', { class: 'stats' },
-        stat(String(s.total), s.total === 1 ? 'workout' : 'workouts'),
-        stat(String(s.current), 'streak'),
-        stat(String(s.best), 'best streak'))),
+        stat(String(total), total === 1 ? 'workout' : 'workouts'),
+        stat(String(s.current), 'weekly streak'),
+        stat(String(s.best), 'best weekly streak'))),
     h('section', { class: 'card' },
       h('h2', {}, 'Workouts by week'),
       h('ol', { class: 'weeks', 'aria-label': 'Workouts done each week' }, weeks.map((w) => h('li', { class: 'week-row' },
         h('span', { class: 'week-n' }, `Week ${w.week}`),
-        h('span', { class: 'dots', role: 'img', 'aria-label': `${w.done} of ${w.planned}` },
-          Array.from({ length: w.planned }, (_, i) => h('span', { class: `dot${i < w.done ? ' on' : ''}` })))))),
-      h('p', { class: 'small muted' }, 'Your streak only breaks if you miss two planned workouts in a row.')),
+        h('span', { class: 'week-val' },
+          h('span', { class: 'dots', 'aria-hidden': 'true' },
+            Array.from({ length: w.planned }, (_, i) => h('span', { class: `dot${i < w.done ? ' on' : ''}` }))),
+          h('span', { class: 'week-text' }, `${w.done} of ${w.planned}`))))),
+      h('p', { class: 'small muted' }, WEEKLY_STREAK_NOTE)),
     h('section', { class: 'card' },
       h('h2', {}, 'Getting stronger'),
       wins.length

@@ -12,10 +12,12 @@ import { renderSettings } from './settings.js';
 import { renderClinicReport } from '../clinic/report.js';
 import { renderKit } from './kit.js';
 import { renderAiReviews } from './ai.js';
+import { focusHeading } from '../shared/a11y.js';
 
 const TABS = [['patients', 'Patients'], ['flags', 'Flags'], ['ai', 'AI reviews'], ['clinics', 'Clinics'], ['settings', 'Settings']];
 
 mountShell({
+  app: 'admin',
   title: 'Admin',
   allowedRoles: ['admin'],
   async render(profile, root) {
@@ -40,6 +42,7 @@ mountShell({
         else if (name === 'settings') await renderSettings(view);
         else await renderPatients(view);
         clear(body).append(view);
+        focusHeading(view);
       } catch (e) {
         console.error(e);
         clear(body).append(h('section', { class: 'card' }, h('h1', {}, 'Couldn’t load this page'), h('p', {}, 'Check your connection, then reload.')));

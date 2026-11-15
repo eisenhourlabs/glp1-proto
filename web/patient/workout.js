@@ -8,6 +8,7 @@ import { swapOptions, weightLabel, lastTimeText } from '../engine/session.js';
 import { formatRange, LOWER_PATTERNS, isSixtyPlus } from '../engine/util.js';
 import { saveExercise, finishSession, discardSession, raiseFlag } from './log_api.js';
 import { stepper, weightControl, restTimer, holdTimer, openSheet, dizzySheet } from './workout_parts.js';
+import { screenChange } from '../shared/a11y.js';
 import { WARNING_SIGNS, HURTS, RATING_OPTIONS, EFFORT_CUE, BREATH_CUE, FAST_CUE, AREA_OPTIONS, areaName } from './session_copy.js';
 
 const FIND_OPTIONS = [{ value: 'much', label: 'Way too light' }, ...RATING_OPTIONS];
@@ -47,7 +48,7 @@ export function runWorkout(root, w) {
 
   const footer = () => h('p', { class: 'small muted warning-signs' }, WARNING_SIGNS);
 
-  const go = (n) => { i = n; render(); window.scrollTo?.(0, 0); };
+  const go = (n) => { i = n; render(); screenChange(root); };
   const next = () => {
     const k = states.findIndex((s, j) => j > i && !finished(s));
     go(k === -1 ? states.length : k);

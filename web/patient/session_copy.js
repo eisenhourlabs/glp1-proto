@@ -73,3 +73,6 @@ export const SKIP_OPTIONS = [
   { value: 'not_feeling_well', label: 'Not feeling well' }, { value: 'sore', label: 'Sore' },
   { value: 'travel', label: 'Traveling' }, { value: 'other', label: 'Something else' },
 ];
+
+/** Under the progress and reward tiles (C6): what the weekly streak counts. */
+export const WEEKLY_STREAK_NOTE = 'Your weekly streak counts the weeks you finished every planned workout. One missed week is forgiven; two in a row start it again.';

@@ -2,14 +2,17 @@
 import { CONFIG, isConfigured } from '../config.js';
 import { db, getProfile, signIn, signOut, sendPasswordReset, homeUrl, APP_ROOT } from './supa.js';
 import { h, clear } from './dom.js';
+import { installErrorReporting, setErrorRole } from './errors.js';
 
 /**
  * @param {object} opts
+ * @param {string} opts.app             'patient' | 'admin' | 'clinic' (named in error reports, A14)
  * @param {string} opts.title           page title shown in the header
  * @param {string[]} opts.allowedRoles  roles allowed on this page
  * @param {(profile:object, root:HTMLElement) => void|Promise<void>} opts.render
  */
-export async function mountShell({ title, allowedRoles, render }) {
+export async function mountShell({ app, title, allowedRoles, render }) {
+  installErrorReporting(app);
   document.title = `${title} · ${CONFIG.BRAND_NAME}`;
   const root = document.getElementById('app');
   if (CONFIG.DEMO_BANNER) document.body.prepend(h('div', { class: 'demo-banner' }, 'Prototype · demo data only'));
@@ -31,6 +34,7 @@ export async function mountShell({ title, allowedRoles, render }) {
       location.replace(homeUrl(profile.role));
       return;
     }
+    setErrorRole(profile.role);
     applyClinicAccent(profile);
     clear(root);
     await render(profile, root);

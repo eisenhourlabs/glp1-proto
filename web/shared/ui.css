@@ -4,13 +4,13 @@
   --surface: #ffffff;
   --surface-2: #f0ebe3;
   --text: #1f2a29;
-  --text-muted: #5d6b69;
+  --text-muted: #55625f;
   --line: #e2dbd0;
   --brand: #2f6f68;          /* program colour (deep sage teal) */
   --brand-ink: #ffffff;
   --clinic-accent: #2f6f68;  /* overridden per clinic at runtime */
-  --good: #3c7a4a;
-  --warn: #9a6a12;
+  --good: #2f6b3d;           /* text on white/tints and white-on-green stay at 4.5:1 or better (tests/contrast.test.js) */
+  --warn: #80560d;
   --danger: #a33a32;
   --focus: #1b5fd1;
   --radius: 14px;
@@ -40,7 +40,7 @@
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0; background: var(--bg); color: var(--text);
-  font: 17px/1.5 var(--font);
+  font: 1.0625rem/1.5 var(--font);      /* 17px at the default size; rem so a larger text-size setting scales everything */
   padding: 0 16px max(24px, env(safe-area-inset-bottom));
 }
 main { max-width: 640px; margin: 0 auto; padding-top: 16px; }
@@ -50,6 +50,9 @@ p { margin: 0 0 .75rem; }
 .muted { color: var(--text-muted); }
 a { color: var(--brand); }
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+/* Headings take focus when a new screen opens (shared/a11y.js); that is for screen readers, so no ring. */
+h1[tabindex="-1"]:focus, h2[tabindex="-1"]:focus { outline: none; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
 .demo-banner {
   margin: 0 -16px; padding: 6px 16px; text-align: center; font-size: .8rem; letter-spacing: .02em;
@@ -76,7 +79,7 @@ input, select, textarea {
 }
 .btn-primary { background: var(--clinic-accent); color: var(--brand-ink); }
 .btn-quiet { background: transparent; border-color: var(--line); }
-.btn-link { background: none; color: var(--brand); padding: 6px 0; min-height: 0; align-self: flex-start; }
+.btn-link { background: none; color: var(--brand); padding: 6px 0; min-height: 44px; align-self: flex-start; }
 .btn:disabled { opacity: .55; cursor: default; }
 
 .form-msg { min-height: 1.5em; color: var(--text-muted); font-size: .95rem; margin: 0; }
@@ -142,15 +145,16 @@ textarea { font: inherit; color: inherit; background: var(--surface); width: 100
 .queue-item summary { cursor: pointer; padding: 12px 0; display: flex; align-items: center; gap: 8px; min-height: var(--tap); }
 .queue-mark { width: 24px; height: 24px; border-radius: 50%; display: inline-grid; place-items: center; font-size: .85rem;
   border: 1.5px solid var(--line); flex: none; }
-.queue-item.done .queue-mark { background: var(--good); border-color: var(--good); color: #fff; }
+.queue-item.done .queue-mark { background: var(--good); border-color: var(--good); color: var(--brand-ink); }
 .queue-item.next .queue-mark { border-color: var(--clinic-accent); color: var(--clinic-accent); font-weight: 700; }
 .queue-item .exlist { padding-bottom: 10px; }
 
 .workout-bar { position: sticky; top: 0; z-index: 5; display: flex; gap: 12px; align-items: center; justify-content: space-between;
   background: var(--bg); padding: 8px 0; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
 .workout-bar > div { flex: 1; min-width: 0; }
+.workout-bar { flex-wrap: wrap; }
 .workout-bar .progress { margin: 4px 0 0; }
-.btn-warn { background: transparent; color: var(--danger); border-color: var(--danger); font-size: .85rem; padding: 6px 12px; min-height: 40px; }
+.btn-warn { background: transparent; color: var(--danger); border-color: var(--danger); font-size: 1rem; padding: 10px 16px; min-height: var(--tap); flex: 0 1 auto; max-width: 100%; }  /* the safety control is never the smallest button (C6) */
 .target { font-size: 1.1rem; font-weight: 600; margin: 4px 0; }
 .tempo { font-weight: 600; color: var(--brand); margin: 0 0 4px; }
 .note-strong { font-weight: 600; color: var(--good); margin: 8px 0; }
@@ -194,10 +198,10 @@ details.cues ul { margin: 4px 0 0; padding-left: 20px; }
 
 /* ── Reward, progress, install ───────────────────────────────────────────── */
 .reward .badge { width: 72px; height: 72px; border-radius: 50%; margin: 16px auto 8px; display: grid; place-items: center;
-  font-size: 2rem; color: #fff; background: var(--clinic-accent); animation: pop .35s ease-out; }
+  font-size: 2rem; color: var(--brand-ink); background: var(--clinic-accent); animation: pop .35s ease-out; }
 @keyframes pop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .reward .badge { animation: none; } }
-.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 16px 0 8px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr)); gap: 8px; margin: 16px 0 8px; }
 .stat { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 6px;
   display: flex; flex-direction: column; align-items: center; }
 .stat-big { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -208,6 +212,8 @@ details.cues ul { margin: 4px 0 0; padding-left: 20px; }
 .week-row:first-child { border-top: 0; }
 .week-n { font-size: .95rem; }
 .dots { display: flex; gap: 6px; }
+.week-val { display: flex; align-items: center; gap: 12px; }
+.week-text { font-size: .9rem; color: var(--text-muted); font-variant-numeric: tabular-nums; min-width: 3.2rem; text-align: right; }
 .dot { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--line); }
 .dot.on { background: var(--good); border-color: var(--good); }
 .wins { list-style: none; margin: 0; padding: 0; }
@@ -246,7 +252,9 @@ table.data th { font-size: .8rem; text-transform: uppercase; letter-spacing: .03
 .list > li { padding: 10px 0; border-top: 1px solid var(--line); }
 .list > li:first-child { border-top: 0; }
 .flag { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
-.flag:not(.open) { opacity: .65; }
+/* A handled flag is quieter, but not by fading it (that made its text too faint to read): muted text, neutral pill. */
+.flag:not(.open) { color: var(--text-muted); }
+.flag:not(.open) .pill { background: var(--surface-2); color: var(--text-muted); }
 .swatch { display: inline-block; width: 14px; height: 14px; border-radius: 4px; margin-right: 8px; vertical-align: -1px; }
 input.num { max-width: 110px; }
 input[type="color"] { width: 48px; min-height: 40px; padding: 2px; }
