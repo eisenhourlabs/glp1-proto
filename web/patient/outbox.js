@@ -107,6 +107,9 @@ const EXEC = {
   async 'flag.insert'(p) {
     must(await db.from('flags').upsert({ ...p.row, detail: resolveDetail(p.row.detail) }, { onConflict: 'client_ref', ignoreDuplicates: true }));
   },
+  async 'benchmark.insert'(p) {
+    must(await db.from('benchmarks').upsert(p.row, { onConflict: 'client_ref', ignoreDuplicates: true }));
+  },
   async 'adjustment.insert'(p) {
     must(await db.from('adjustments').upsert({ ...p.row, detail: resolveDetail(p.row.detail) }, { onConflict: 'client_ref', ignoreDuplicates: true }));
   },

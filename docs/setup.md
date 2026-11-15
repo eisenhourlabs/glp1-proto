@@ -122,7 +122,7 @@ run them on the synthetic content or on the real export (more realistic):
 npm i -g playwright@1.63.0 axe-core@4.10.3 && npx playwright@1.63.0 install chromium
 F=tests/fixtures/content.synthetic.json                   # or: python scripts/export_content_json.py --out ../content.local.json
 node scripts/demo_data.mjs $F /tmp/demo.json              # or use <content folder>/demo_seed.local.json with the real export
-for t in admin join onboarding review workout age60 comeback lighter update offline a11y errors; do node tests/browser/$t.smoke.mjs $F [screenshot-dir]; done
+for t in admin join onboarding review workout age60 comeback lighter update offline a11y errors benchmarks; do node tests/browser/$t.smoke.mjs $F [screenshot-dir]; done
 node tests/browser/demo.smoke.mjs $F /tmp/demo.json [screenshot-dir]
 ```
 They run the real pages against an in-memory fake of Supabase (`tests/browser/fake_supabase.js`, served in place of

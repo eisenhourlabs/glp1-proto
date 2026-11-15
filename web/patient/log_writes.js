@@ -80,3 +80,11 @@ export async function addAdjustment(uid, cycleId, { type, reason, detail }) {
   await submit({ kind: 'adjustment.insert', payload: { row }, keys: [`a:${ref}`],
     apply: (m) => m.put({ ...row, id: `ref:${ref}`, created_at: now() }, `a:${ref}`) });
 }
+
+/** One benchmark result (B13): moment 'baseline' | 'transition', test id, whole-number value, variant or null. */
+export async function saveBenchmark(uid, cycleId, { moment, test, value, variant = null }) {
+  const ref = newRef();
+  const row = { patient_id: uid, cycle_id: cycleId, moment, test, value, variant, client_ref: ref };
+  await submit({ kind: 'benchmark.insert', payload: { row }, keys: [`b:${ref}`],
+    apply: (m) => m.put({ ...row, id: `ref:${ref}`, created_at: now() }, `b:${ref}`) });
+}
