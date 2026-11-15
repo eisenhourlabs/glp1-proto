@@ -21,7 +21,7 @@ const exerciseLogs = [
   { exercise_id: 'HP04', sets: [{ weight: 20, reps: 10 }], rating: 'hard', created_at: '2026-11-02T10:00:00Z' },
 ];
 const summary = cycleSummary({ patient, cycle, template, logs, exerciseLogs, flags: [{ type: 'dizzy' }], adjustments: [], library: LIBRARY,
-  reflection: { worked: ['short_workouts'], in_the_way: ['busy'], adjust: 'more_challenge', focus: 'Stronger legs for stairs', days: 3, text: 'my doctor said…' } });
+  reflection: { worked: ['short_workouts'], in_the_way: ['busy'], adjust: 'more', focus: 'Stronger legs for stairs and getting up', days: 3, text: 'my doctor said…' } });
 const profile = reviewProfile(patient);
 const ctx = { summary, library: LIBRARY, profile, settings: {} };
 
@@ -38,7 +38,7 @@ test('cycleSummary is de-identified and complete', () => {
   assert.equal(summary.flags.dizzy, 1);
   assert.deepEqual(summary.cycle.week_modes, { 4: 'consolidate' });
   assert.equal(summary.strength_wins[0].to, '70 lb');
-  assert.equal(summary.reflection.focus, 'Stronger legs for stairs');
+  assert.equal(summary.reflection.focus, 'Stronger legs for stairs and getting up');
 });
 
 test('libraryOptions: her equipment, up to one level above', () => {
@@ -53,7 +53,7 @@ test('default proposal: next in sequence, levels unchanged, her days and focus, 
   assert.equal(d.cycle_type, 'C2');
   assert.equal(d.days_per_week, 3);
   assert.deepEqual(d.level_changes, []);
-  assert.equal(d.focus, 'Stronger legs for stairs');
+  assert.equal(d.focus, 'Stronger legs for stairs and getting up');
   assert.match(d.recap, /26 workouts/);
   assert.deepEqual(validateProposal(d, ctx), { errors: [], review: [] }, 'the default always validates');
   assert.equal(NEXT_CYCLE.C3, 'C3');

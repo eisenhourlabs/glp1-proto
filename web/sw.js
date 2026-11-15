@@ -49,6 +49,7 @@ const ASSETS = [
   './engine/offers.js',
   './engine/progress.js',
   './engine/readiness.js',
+  './engine/reflection.js',
   './engine/report.js',
   './engine/resolve.js',
   './engine/review.js',

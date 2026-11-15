@@ -8,22 +8,13 @@ import { cycleSummary, libraryOptions, defaultProposal, reviewProfile, levelCeil
 import { normalizeProposal, validateProposal, PROPOSAL_TOOL, buildPrompt } from '../../../web/engine/review_validate.js';
 import { weekOfCycle } from '../../../web/engine/cycle.js';
 import { addDays } from '../../../web/engine/util.js';
+import { choicesOnly } from '../../../web/engine/reflection.js';
 
 const must = ({ data, error }) => { if (error) throw error; return data; };
-const chips = (a) => (Array.isArray(a) ? a.slice(0, 8).map((x) => String(x).slice(0, 40)) : []);
-
-/** Her reflection, trimmed to known shapes. The note is stored for the team and never sent to the AI. */
+/** Her reflection: only the fixed choices (engine/reflection.js, backlog E4) go anywhere near the AI. The free-text
+ *  note is stored with the proposal for the team and never enters the summary or the prompt. */
 export function cleanReflection(r = {}) {
-  const days = Number(r.days);
-  const minutes = Number(r.minutes);
-  return {
-    worked: chips(r.worked), in_the_way: chips(r.in_the_way),
-    adjust: r.adjust ? String(r.adjust).slice(0, 40) : null,
-    focus: r.focus ? String(r.focus).trim().slice(0, 80) : null,
-    days: [2, 3, 4].includes(days) ? days : null,
-    minutes: [30, 45, 60].includes(minutes) ? minutes : null,
-    note: r.note ? String(r.note).slice(0, 500) : null,
-  };
+  return { ...choicesOnly(r), note: r?.note ? String(r.note).slice(0, 500) : null };
 }
 
 export async function reviewCycle({ token, body = {} }, deps) {

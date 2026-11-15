@@ -1005,6 +1005,43 @@ const rewardMessage = (total) => MILESTONES[total] ?? EVERYDAY[total % EVERYDAY.
 return { weeklyCounts, plannedSessions, streaks, strengthWins, rewardMessage };
 })();
 
+// ── web/engine/reflection.js ──
+const __reflection = (() => {
+// End-of-cycle reflection choices (Framework §14) and the filter that keeps only them (backlog E4).
+// The patient app shows these; the ai-cycle-review function accepts nothing else, so nothing she types reaches the AI.
+// Values are stable keys; labels are what she sees.
+
+const WORKED = [['short_workouts', 'Short workouts'], ['getting_stronger', 'Feeling stronger'], ['schedule', 'My schedule'],
+  ['energy', 'More energy'], ['checkins', 'The check-ins'], ['guidance', 'Knowing what to do']];
+const IN_THE_WAY = [['busy', 'Busy weeks'], ['low_energy', 'Low energy'], ['soreness', 'Soreness'], ['travel', 'Travel'],
+  ['motivation', 'Motivation'], ['nothing', 'Nothing really']];
+const ADJUST = [['same', 'Keep it the same'], ['more', 'A bit more challenge'], ['easier', 'A bit easier'],
+  ['shorter', 'Shorter workouts'], ['fewer_days', 'Fewer days'], ['more_days', 'More days']];
+/** Focus choices: the value is the text itself (it is shown back to her and to the coach as is). */
+const FOCUS = ['Stronger legs for stairs and getting up', 'Upper-body strength for carrying and lifting', 'Steadier balance',
+  'Showing up every week', 'Everyday tasks feel easier'];
+
+const keys = (list) => new Set(list.map(([k]) => k));
+const WORKED_K = keys(WORKED); const IN_THE_WAY_K = keys(IN_THE_WAY); const ADJUST_K = keys(ADJUST); const FOCUS_K = new Set(FOCUS);
+const pick = (a, allowed) => (Array.isArray(a) ? [...new Set(a.filter((x) => allowed.has(x)))] : []);
+
+/**
+ * Her reflection reduced to the fixed choices. Anything else (free text, unknown keys, other fields) is dropped.
+ * → { worked: [], in_the_way: [], adjust: key|null, focus: choice|null, days: 2|3|4|null, minutes: 30|45|60|null }
+ */
+function choicesOnly(r = {}) {
+  const days = Number(r?.days); const minutes = Number(r?.minutes);
+  return {
+    worked: pick(r?.worked, WORKED_K), in_the_way: pick(r?.in_the_way, IN_THE_WAY_K),
+    adjust: ADJUST_K.has(r?.adjust) ? r.adjust : null,
+    focus: FOCUS_K.has(typeof r?.focus === 'string' ? r.focus.trim() : null) ? r.focus.trim() : null,
+    days: [2, 3, 4].includes(days) ? days : null,
+    minutes: [30, 45, 60].includes(minutes) ? minutes : null,
+  };
+}
+return { WORKED, IN_THE_WAY, ADJUST, FOCUS, choicesOnly };
+})();
+
 // ── web/engine/review.js ──
 const __review = (() => {
 // End-of-cycle review (Framework §14): the de-identified cycle summary the AI sees, the library options it may pick
@@ -1016,6 +1053,7 @@ const { reviewLevelUps } = __levels;
 const { contextFor, eligible } = __resolve;
 const { weeklyCounts, streaks, strengthWins } = __progress;
 const { workingSets } = __session;
+const { choicesOnly } = __reflection;
 const NEXT_CYCLE = { C1: 'C2', C2: 'C3', C3: 'C3' };
 const CYCLE_NAMES = { C1: 'Foundations', C2: 'Building', C3: 'Strong & Consistent' };
 const PATTERN_NAMES = {
@@ -1087,8 +1125,8 @@ function cycleSummary({ patient, cycle, template, logs, exerciseLogs = [], flags
     adjustments: count(adjustments.map((a) => a.type)),
     patterns,
     strength_wins: strengthWins(exerciseLogs, library, 3).map((w) => ({ exercise: w.name, from: w.from, to: w.to })),
-    reflection: { worked: reflection.worked || [], in_the_way: reflection.in_the_way || [], adjust: reflection.adjust || null,
-      focus: reflection.focus || null, days: reflection.days ?? null },
+    // Fixed choices only (E4): no free text and no ids reach the summary the AI sees.
+    reflection: (({ worked, in_the_way, adjust, focus, days }) => ({ worked, in_the_way, adjust, focus, days }))(choicesOnly(reflection)),
   };
 }
 
@@ -1366,21 +1404,12 @@ const { cycleSummary, libraryOptions, defaultProposal, reviewProfile, levelCeili
 const { normalizeProposal, validateProposal, PROPOSAL_TOOL, buildPrompt } = __review_validate;
 const { weekOfCycle } = __cycle;
 const { addDays } = __util;
+const { choicesOnly } = __reflection;
 const must = ({ data, error }) => { if (error) throw error; return data; };
-const chips = (a) => (Array.isArray(a) ? a.slice(0, 8).map((x) => String(x).slice(0, 40)) : []);
-
-/** Her reflection, trimmed to known shapes. The note is stored for the team and never sent to the AI. */
+/** Her reflection: only the fixed choices (engine/reflection.js, backlog E4) go anywhere near the AI. The free-text
+ *  note is stored with the proposal for the team and never enters the summary or the prompt. */
 function cleanReflection(r = {}) {
-  const days = Number(r.days);
-  const minutes = Number(r.minutes);
-  return {
-    worked: chips(r.worked), in_the_way: chips(r.in_the_way),
-    adjust: r.adjust ? String(r.adjust).slice(0, 40) : null,
-    focus: r.focus ? String(r.focus).trim().slice(0, 80) : null,
-    days: [2, 3, 4].includes(days) ? days : null,
-    minutes: [30, 45, 60].includes(minutes) ? minutes : null,
-    note: r.note ? String(r.note).slice(0, 500) : null,
-  };
+  return { ...choicesOnly(r), note: r?.note ? String(r.note).slice(0, 500) : null };
 }
 
 async function reviewCycle({ token, body = {} }, deps) {
