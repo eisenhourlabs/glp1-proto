@@ -8,7 +8,7 @@ import { sessionOrder, weekStatus, trainedOn, weekWindow, weekModeFor } from '..
 import { swapNote } from '../engine/resolve.js';
 import { activeAdjustments } from '../engine/checkin.js';
 import { loadContent, localToday } from './api.js';
-import { loadSettings, loadWarmups, cycleLogs, lastWorkoutDate, flagsSince, startSession, sessionExerciseLogs, finishSession,
+import { loadSettings, loadWarmups, cycleLogs, lastWorkout, flagsSince, startSession, sessionExerciseLogs, finishSession,
   discardSession, saveWeekMode, updateCycleStart, cycleAdjustments, skipToday, cycleProposal } from './log_api.js';
 import { makePlanner, warmupFor, renderReadiness } from './today.js';
 import { runWorkout } from './workout.js';
@@ -20,6 +20,7 @@ import { openSheet } from './workout_parts.js';
 import { SKIP_OPTIONS } from './session_copy.js';
 import { renderReview } from './review.js';
 import { addDays } from '../engine/util.js';
+import { homeState, comebackFrom } from '../engine/home_state.js';
 
 const GOALS = {
   keep_muscle: 'Keep my muscle while I lose weight', everyday_strength: 'Make everyday life easier',
@@ -49,7 +50,7 @@ export async function renderHome(root, { patient, cycle, reload }) {
   const active = activeAdjustments({ adjustments: await cycleAdjustments(cycle.id), logs, week });
   const lighterByCheckin = active.lighterWeek && decision.mode === 'build';
   const weekMode = lighterByCheckin ? 'lighter' : decision.mode;
-  const comeback = comebackMode(await lastWorkoutDate(patient.id), today, settings);
+  const comeback = comebackMode(comebackFrom(await lastWorkout(patient.id), cycle), today, settings);
   const inProgress = logs.find((l) => l.status === 'in_progress' && l.log_date === today);
   const lastDone = [...logs].reverse().find((l) => DONE.has(l.status));
   const env = { patient, cycle, content, settings, week, weekMode, comeback, holdAndTrim: active.holdAndTrim };
@@ -121,24 +122,18 @@ export async function renderHome(root, { patient, cycle, reload }) {
     window.scrollTo?.(0, 0);
   };
 
-  // ── Home screen ──
+  // ── Home screen: one notice at most (B11) ──
+  const state = homeState({ rawWeek, weekComplete: status.complete, proposalReady: Boolean(proposal), comeback: comeback.mode,
+    weekMode: decision.mode, lighterByCheckin });
   const hero = h('section', { class: 'card hero' },
-    h('p', { class: 'eyebrow' }, `${template.name} · Week ${week} of 9`),
-    h('h1', {}, rawWeek < 1 ? 'Your program' : 'This week'),
+    h('p', { class: 'eyebrow' }, `${template.name} · ${state.label}`),
+    h('h1', {}, rawWeek < 1 ? 'Your program' : state.complete ? 'Cycle complete' : 'This week'),
     patient.goal ? h('p', { class: 'goal' }, `Your goal: ${GOALS[patient.goal] ?? patient.goal}`, patient.goal_words ? ` · “${patient.goal_words}”` : '') : null);
-  const notes = [];
-  if (rawWeek < 1) notes.push(h('p', {}, `Your program starts on ${prettyDate(cycle.start_date)}. Want to start today instead?`),
-    secondary('Start today', async () => { await updateCycleStart(cycle, today); rerender(); }));
-  if (reviewOpen) {
-    notes.push(h('p', {}, proposal ? `Your Cycle ${cycle.cycle_no + 1} plan is ready. Start it when you’re ready.`
-      : rawWeek > 9 ? 'You’ve finished this cycle! Do your 2-minute review to plan the next one.'
-        : 'Week 9: time for your cycle review. It takes about 2 minutes.'));
-    if (rawWeek === 9) notes.push(secondary(proposal ? 'See your next cycle' : 'Your cycle review', showReview));
-  }
-  const modeMsg = lighterByCheckin ? 'This week is lighter so you can recharge. It still counts fully.' : weekModeMessage(decision.mode);
-  if (modeMsg) notes.push(h('p', {}, modeMsg));
-  if (comeback.mode !== 'none') notes.push(h('p', {}, COMEBACK[comeback.mode]));
-  if (notes.length) hero.append(h('div', { class: 'card soft' }, ...notes));
+  const notes = noticeContent(state, {
+    startsOn: prettyDate(cycle.start_date), nextNo: cycle.cycle_no + 1, rawWeek, comeback: comeback.mode, weekMode: decision.mode, lighterByCheckin,
+    startToday: async () => { await updateCycleStart(cycle, today); rerender(); }, showReview,
+  });
+  if (notes.length) hero.append(h('div', { class: 'card soft', 'data-notice': state.notice }, ...notes));
 
   let action;
   if (rawWeek < 1) action = null;
@@ -153,10 +148,11 @@ export async function renderHome(root, { patient, cycle, reload }) {
         : h('button', { type: 'button', class: 'btn btn-link center-self', onclick: () => skipSheet() }, 'Can’t train today?'));
   }
 
-  const queue = h('section', { class: 'card' }, h('h2', {}, 'This week’s workouts'),
+  const ended = rawWeek > 9;   // the cycle is over: show week 9 as it finished, with nothing marked "next"
+  const queue = h('section', { class: 'card' }, h('h2', {}, ended ? 'Week 9 workouts' : 'This week’s workouts'),
     h('ol', { class: 'queue' }, order.map((s) => {
       const done = status.done.includes(s);
-      const isNext = !done && s === status.next;
+      const isNext = !ended && !done && s === status.next;
       const items = cycle.items.filter((i) => i.session === s && i.exercise_id).sort((a, b) => a.ord - b.ord);
       return h('li', { class: `queue-item${done ? ' done' : ''}${isNext ? ' next' : ''}` },
         h('details', {}, h('summary', {},
@@ -168,12 +164,27 @@ export async function renderHome(root, { patient, cycle, reload }) {
           return h('li', {}, lib[i.exercise_id]?.name ?? i.exercise_id, note ? h('span', { class: 'note' }, note) : null);
         }))));
     })),
-    h('p', { class: 'small muted' }, 'Do them in any days that suit you. Anything not done by the end of the week simply drops off.'));
+    ended ? null : h('p', { class: 'small muted' }, 'Do them in any days that suit you. Anything not done by the end of the week simply drops off.'));
 
   root.append(hero, action ? h('div', { class: 'home-action' }, action) : null, queue,
     h('div', { class: 'home-action' }, secondary('Your progress', showProgress)), installCard());
 
   function fail(e) { console.error(e); clear(root).append(h('section', { class: 'card' }, h('h1', {}, 'Something didn’t load'), h('p', {}, 'Check your connection, then reload.'))); }
+}
+
+/** The content of the single home notice for a homeState() result. */
+function noticeContent(state, { startsOn, nextNo, rawWeek, comeback, weekMode, lighterByCheckin, startToday, showReview }) {
+  switch (state.notice) {
+    case 'upcoming': return [h('p', {}, `Your program starts on ${startsOn}. Want to start today instead?`), secondary('Start today', startToday)];
+    case 'next_ready': return [h('p', {}, `Your Cycle ${nextNo} plan is ready. Start it when you’re ready.`),
+      rawWeek === 9 ? secondary('See your next cycle', showReview) : null];
+    case 'review_due': return [h('p', {}, state.complete ? 'You’ve finished this cycle! Do your 2-minute review to plan the next one.'
+      : 'Week 9: time for your cycle review. It takes about 2 minutes.'), rawWeek === 9 ? secondary('Your cycle review', showReview) : null];
+    case 'comeback': return [h('p', {}, COMEBACK[comeback])];
+    case 'week_mode': return [h('p', {}, lighterByCheckin && weekMode === 'build'
+      ? 'This week is lighter so you can recharge. It still counts fully.' : weekModeMessage(weekMode))];
+    default: return [];
+  }
 }
 
 /** Workouts left open on an earlier day: keep what she did (partial) or remove an empty one. */

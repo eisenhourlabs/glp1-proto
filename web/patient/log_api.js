@@ -25,11 +25,13 @@ export async function loadWarmups(version) {
 export const cycleLogs = async (cycleId) =>
   must(await db.from('session_logs').select('*').eq('cycle_id', cycleId).order('log_date', { ascending: true }).order('id'));
 
-/** The date of her last completed workout (any cycle), or null. */
-export async function lastWorkoutDate(uid) {
-  const rows = must(await db.from('session_logs').select('log_date').eq('patient_id', uid).in('status', ['done', 'partial'])
+/** Her last completed workout (any cycle): { date, cycleStart } (start date of the cycle it was in), or null. */
+export async function lastWorkout(uid) {
+  const rows = must(await db.from('session_logs').select('log_date,cycle_id').eq('patient_id', uid).in('status', ['done', 'partial'])
     .order('log_date', { ascending: false }).limit(1));
-  return rows[0]?.log_date ?? null;
+  if (!rows[0]) return null;
+  const cyc = must(await db.from('cycles').select('start_date').eq('id', rows[0].cycle_id).maybeSingle());
+  return { date: rows[0].log_date, cycleStart: cyc?.start_date ?? null };
 }
 
 export const flagsSince = async (uid, fromIso) =>

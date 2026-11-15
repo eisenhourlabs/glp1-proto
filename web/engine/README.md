@@ -15,6 +15,7 @@ Modules:
 | `cycle.js` | week of cycle, adaptive week-4 / week-9 decision (§7.2a), weekly dose per slot, session queue, cycle materialization, template choice |
 | `readiness.js` | Scale today, make it easier, work-around swaps, soreness adjustments |
 | `adjust.js` | check-in adjustments (§12), pattern flags (§10), rest signals for the adaptive weeks |
+| `home_state.js` | the one notice the home screen shows (priority order), the cycle label ("Cycle complete" after week 9), and the comeback gap without the days spent waiting between cycles |
 | `adherence.js` | adherence, forgiving streak ("never two in a row"), comeback modes, clinic call / slipping flags |
 
 Planned: `validate.js` (checks AI cycle proposals against the Framework, Phase 5), `badges.js` (Phase 3).
