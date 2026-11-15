@@ -4,6 +4,7 @@
 
 import { resolveSlot } from './resolve.js';
 import { scaleTodayWeight } from './load.js';
+import { AREAS } from './util.js';
 
 /**
  * Scale today: primaries same exercises and sets, ~10% lighter at RIR 3; secondaries −1 set (min 1);
@@ -70,4 +71,24 @@ export function applySoreness(items, soreAreas) {
     return { ...it, holdLoad: true, dose: { ...it.dose, sets }, soreArea: hit };
   });
   return { items: out, touched };
+}
+
+/**
+ * Standing work-arounds after a pain report (Framework §10, backlog B7, Amanda packet Q10): an area she reported pain in
+ * stays a work-around every workout until she taps "Feeling better". painFlags: her flags of type 'pain'
+ * ({ detail: { area }, created_at }); clears: adjustments of type 'workaround_cleared' ({ detail: { area }, created_at }).
+ * @returns {string[]} areas, in body order
+ */
+export function standingAreas(painFlags = [], clears = []) {
+  const latest = (rows) => {
+    const m = {};
+    for (const r of rows) {
+      const a = r.detail?.area; const t = String(r.created_at ?? '');
+      if (a && (!m[a] || t > m[a])) m[a] = t;
+    }
+    return m;
+  };
+  const pain = latest(painFlags.filter((f) => !f.type || f.type === 'pain'));
+  const cleared = latest(clears);
+  return AREAS.filter((a) => pain[a] && !(cleared[a] && cleared[a] >= pain[a]));
 }

@@ -72,7 +72,7 @@ async function afterCheckin({ patient, cycle, log, week, perWeek, settings }) {
   return r.messages;
 }
 
-/** ctx: { patient, cycle, week, perWeek, status, messages, onHome, onProgress } */
+/** ctx: { patient, cycle, week, perWeek, status, messages, onHome, onProgress, offerCard (B6 level-up offer, or null) } */
 export async function renderReward(root, ctx) {
   const logs = await cycleLogs(ctx.cycle.id);
   const weeks = weeklyCounts(logs, ctx.week, ctx.perWeek);
@@ -88,6 +88,7 @@ export async function renderReward(root, ctx) {
       stat(String(s.total), s.total === 1 ? 'workout total' : 'workouts total')),
     h('p', { class: 'small muted' }, 'Your streak only breaks if you miss two planned workouts in a row.'),
     ...ctx.messages.map((m) => h('p', { class: 'card soft' }, m)),
+    ctx.offerCard ?? null,
     h('div', { class: 'actions' }, secondary('See progress', ctx.onProgress), primary('Back to home', ctx.onHome))));
 }
 

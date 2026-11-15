@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { checkinAdjustments, patternFlags, restSignals } from '../../web/engine/adjust.js';
-import { adherence, forgivingStreak, bestStreak, comebackMode, needsCheckInCall, isSlipping } from '../../web/engine/adherence.js';
+import { adherence, forgivingStreak, bestStreak, comebackMode, restartDue, needsCheckInCall, isSlipping } from '../../web/engine/adherence.js';
 
 const c = (date, o = {}) => ({ date, feel: 'right', energy: 'ok', soreAreas: [], workaroundAreas: [], painAreas: [], soreness: 'none', ...o });
 
@@ -70,4 +70,23 @@ test('clinic flags', () => {
   assert.equal(needsCheckInCall(null, '2026-11-05', '2026-11-08'), false);
   assert.equal(isSlipping(6, 2), true);
   assert.equal(isSlipping(6, 3), false);
+});
+
+test('B7: 14–27 days away means two lighter sessions; the second cuts only what she has not done since', () => {
+  const second = comebackMode('2026-11-16', '2026-11-18', {}, { gap: 16, date: '2026-11-16' });
+  assert.deepEqual(second, { mode: 'reentry', setDelta: -1, loadCutPct: 15, sessions: 2, second: true, cutBefore: '2026-11-16' });
+  assert.equal(comebackMode('2026-11-18', '2026-11-20', {}, { gap: 2, date: '2026-11-18' }).mode, 'none', 'third session: normal');
+  assert.equal(comebackMode('2026-11-16', '2026-11-18', {}, { gap: 9, date: '2026-11-16' }).mode, 'none', 'a welcome back is one session');
+  assert.equal(comebackMode('2026-11-16', '2026-11-18', {}, { gap: 30, date: '2026-11-16' }).mode, 'none', 'a restart is one lighter session');
+  assert.equal(comebackMode('2026-11-01', '2026-11-29', {}, { gap: 16 }).mode, 'restart', 'a new long gap wins');
+});
+
+test('B7: restartDue — 28+ days inside the training weeks restarts at week 1; after week 9 the review comes first', () => {
+  assert.equal(restartDue({ mode: 'restart', rawWeek: 8, lastWeekInCycle: 3 }), true);
+  assert.equal(restartDue({ mode: 'restart', rawWeek: 11, lastWeekInCycle: 5 }), true, 'came back after the cycle ended, gap began in week 5');
+  assert.equal(restartDue({ mode: 'restart', rawWeek: 7, lastWeekInCycle: null }), true, 'never trained in this cycle');
+  assert.equal(restartDue({ mode: 'restart', rawWeek: 13, lastWeekInCycle: 9 }), false, 'finished the cycle: review');
+  assert.equal(restartDue({ mode: 'restart', rawWeek: 8, lastWeekInCycle: 3, proposalReady: true }), false);
+  assert.equal(restartDue({ mode: 'reentry', rawWeek: 8, lastWeekInCycle: 3 }), false);
+  assert.equal(restartDue({ mode: 'restart', rawWeek: 1, lastWeekInCycle: null }), false, 'already week 1');
 });

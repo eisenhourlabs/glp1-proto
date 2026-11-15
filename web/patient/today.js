@@ -12,15 +12,18 @@ import { exerciseHistory } from './log_api.js';
 import { PRE_SESSION, ENERGY_OPTIONS, AREA_OPTIONS, SCALE_TODAY } from './session_copy.js';
 
 /**
- * A planner for one workout. env: { patient, cycle, content, settings, week, weekMode, comeback, excludeSession }
+ * A planner for one workout. env: { patient, cycle, content, settings, week, weekMode, comeback, excludeSession,
+ *   standing: areas kept as work-arounds since a pain report (B7), capNo: the cycle number the age rules count from }
  * today: { energy, areas: [], scale: bool, easier: bool, soreAreas: [] }
  */
 export function makePlanner(env, today) {
   const { patient, cycle, content, settings, week, weekMode, comeback } = env;
+  const standing = env.standing || [];
+  const areasToday = () => [...new Set([...(today.areas || []), ...standing])];
   const profile = engineProfile(patient);
   const lib = content.library;
   const ctx = (history) => ({
-    week: Math.min(week, 9), weekMode, cycleType: cycle.cycle_type, cycleNo: cycle.cycle_no, ageBand: patient.age_band,
+    week: Math.min(week, 9), weekMode, cycleType: cycle.cycle_type, cycleNo: env.capNo ?? cycle.cycle_no, ageBand: patient.age_band,
     dumbbells: (patient.dumbbells_available || []).map(Number), comeback, history, settings,
   });
   const template = content.templates.find((t) => t.template_id === cycle.template_id);
@@ -40,12 +43,12 @@ export function makePlanner(env, today) {
     return today.scale ? scaleToday(out, settings) : out;
   };
   return {
-    profile, lib,
+    profile, lib, cycleSlots, standing,
     /** Today's items for a session, in order. */
     async build(session) {
       let items = baseItems(cycle.items, session, cycleSlots, lib);
       if (today.easier) items = makeEasier(items, profile, lib);
-      if (today.areas?.length) items = applyWorkarounds(items, today.areas, profile, lib).items;
+      if (areasToday().length) items = applyWorkarounds(items, areasToday(), profile, lib).items;
       return plan(items.filter((it) => it.exercise));
     },
     /** One item with a different exercise (her swap). */
@@ -55,8 +58,8 @@ export function makePlanner(env, today) {
     },
     /** Work around an area for the rest of today: items that load it heavily swap, or drop if nothing fits. */
     async workaround(items, area) {
-      const areas = [...new Set([...(today.areas || []), area])];
-      today.areas = areas;
+      today.areas = [...new Set([...(today.areas || []), area])];
+      const areas = areasToday();
       const { items: next } = applyWorkarounds(items, areas, profile, lib);
       const changed = next.map((it, i) => (it.exercise && it.exercise.id !== items[i].exercise?.id ? i : -1)).filter((i) => i >= 0);
       const replanned = changed.length ? await plan(changed.map((i) => next[i])) : [];
@@ -79,7 +82,7 @@ export function warmupFor(warmups, patient) {
 /**
  * The readiness screen. onStart({ energy, areas, scale, easier }) begins the workout; onBack returns home.
  */
-export function renderReadiness(root, { sessionName, onStart, onBack }) {
+export function renderReadiness(root, { sessionName, onStart, onBack, standing = [], onBetter }) {
   const a = { energy: null, areas: [], scale: false, easier: false };
   const msg = statusLine();
   const scaleBox = h('div', {});
@@ -108,6 +111,7 @@ export function renderReadiness(root, { sessionName, onStart, onBack }) {
       h('div', { class: 'q' }, h('p', {}, 'Energy today'),
         choices({ columns: 3, options: ENERGY_OPTIONS, value: null, label: 'Energy today', onChange: (v) => { a.energy = v; paintScale(); } })),
       scaleBox,
+      standingCard(standing, onBetter),
       h('div', { class: 'q' }, h('p', {}, 'Anything to work around today?'), areaChoices),
       h('div', { class: 'card soft' }, h('h2', {}, 'Before you start'), h('ul', {}, PRE_SESSION.map((t) => h('li', {}, t)))),
       msg,
@@ -119,3 +123,23 @@ export function renderReadiness(root, { sessionName, onStart, onBack }) {
     })],
   }));
 }
+
+/**
+ * Standing work-arounds after a pain report (Framework §10, B7): what we keep working around, with "Feeling better"
+ * per area. onBetter(area) saves it and resolves; the row then says so.
+ */
+function standingCard(areas, onBetter) {
+  if (!areas.length) return null;
+  const box = h('div', { class: 'card soft', 'data-standing': areas.join(',') }, h('h2', {}, 'Still working around'),
+    h('p', {}, 'After the pain you reported, we’re keeping these areas out of anything that loads them hard until you say they feel better.'));
+  for (const area of areas) {
+    const row = h('div', { class: 'row' }, h('span', { class: 'exname' }, areaLabel(area)));
+    row.append(secondary('Feeling better', async () => {
+      try { await onBetter?.(area); row.replaceChildren(h('span', {}, `${areaLabel(area)}: great, back to your usual exercises.`)); }
+      catch (e) { console.error(e); row.append(h('span', { class: 'form-msg' }, ' Couldn’t save. Try again.')); }
+    }));
+    box.append(row);
+  }
+  return box;
+}
+const areaLabel = (area) => AREA_OPTIONS.find((o) => o.value === area)?.label ?? area;

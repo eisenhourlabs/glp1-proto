@@ -5,12 +5,13 @@ import { weeklyCounts, streaks, strengthWins } from '../engine/progress.js';
 import { cycleLogs, allExerciseLogs } from './log_api.js';
 import { reminderCard } from './extras.js';
 
-/** ctx: { patient, cycle, template, week, library, onBack } */
+/** ctx: { patient, cycle, template, week, library, carriedBest (best streak before a restart), onBack } */
 export async function renderProgress(root, ctx) {
   const [logs, exLogs] = await Promise.all([cycleLogs(ctx.cycle.id), allExerciseLogs(ctx.patient.id)]);
   const perWeek = ctx.template.days_per_week;
   const weeks = weeklyCounts(logs, ctx.week, perWeek);
   const s = streaks(weeks, ctx.week);
+  s.best = Math.max(s.best, ctx.carriedBest ?? 0);   // a restart after time away (B7) keeps her best streak
   const wins = strengthWins(exLogs, ctx.library);
 
   root.append(

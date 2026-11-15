@@ -91,7 +91,8 @@ function firstNote(loadType, range, measure) {
 
 /**
  * Dose and suggested weight for each item.
- * ctx: { week, weekMode, cycleType, ageBand, dumbbells: number[], comeback: comebackMode(), history: {exerciseId: rows},
+ * ctx: { week, weekMode, cycleType, ageBand, dumbbells: number[], comeback: comebackMode() (cutBefore: see cutApplies),
+ *        history: {exerciseId: rows},
  *        settings }
  * Returns items with: dose {sets, reps, rir, time, restSec}, range, measure, weight (suggested; null = she picks),
  * lastWeight, suggestion {action, targetReps, note}.
@@ -107,22 +108,31 @@ export function planSession(items, ctx) {
     const range = measure === 'time' && dose.time ? dose.time : dose.reps;
     const { last, prevRating, older } = lastPerformance(history[ex.id], measure);
     const s = suggestNext({
-      loadType: ex.load_type, last, prevRating, older, range, ageBand, weekMode, settings,
+      loadType: ex.load_type, last, prevRating, older, range, ageBand, weekMode, settings, measure,
       lower: LOWER_PATTERNS.has(it.slot.pattern), earlyFoundations: cycleType === 'C1' && week <= 3,
       available: ex.load_type === 'dumbbell' && dumbbells.length ? dumbbells : undefined,
     });
     let weight = s.weight;
     let note = (s.action === 'find' && firstNote(ex.load_type, range, measure)) || s.note;
     if (measure === 'time' && s.action === 'hold') note = 'Same as last time. Try holding a few seconds longer.';
-    if (s.action === 'progress-bodyweight') note = 'Make it harder today: lower slowly for 3 seconds on every rep.';
-    if (comeback && comeback.mode !== 'none' && weight != null) {
+    if (comeback && comeback.mode !== 'none' && weight != null && cutApplies(history[ex.id], comeback)) {
       weight = reduceLoad(ex.load_type, weight, comeback.loadCutPct, { ageBand, available: dumbbells.length ? dumbbells : undefined });
       note = 'Welcome back! A little lighter today so you can ease back in.';
     }
-    const stage = ex.load_type === 'band' ? (s.stage ?? 0) : 0;
+    const stage = ex.load_type === 'band' || ex.load_type === 'bodyweight' ? (s.stage ?? 0) : 0;
     return { ...it, dose, range, measure, weight, last, lastWeight: last?.weight ?? null,
       suggestion: { action: s.action, targetReps: s.targetReps, note, stage, tempo: BAND_TEMPO[stage] || null } };
   });
+}
+
+/**
+ * Comeback load cut for this exercise (§13, B7)? The second lighter session after 14–27 days away cuts only exercises
+ * last done before the first one (comeback.cutBefore), so a weight she already eased back in is not cut twice.
+ */
+export function cutApplies(rows, comeback) {
+  if (!comeback?.cutBefore) return true;
+  const lastDate = (rows || []).find((l) => !l.skipped && l.sets?.length)?.created_at?.slice(0, 10);
+  return !lastDate || lastDate < comeback.cutBefore;
 }
 
 /**
